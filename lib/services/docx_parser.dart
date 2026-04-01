@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -202,6 +201,7 @@ class DocxParser {
 
     for (final file in archive) {
       final n = file.name;
+      debugPrint("%%%%%%%%&&&&&&&&&& $n &&&&&&&&&&&&&&**************");
       if (n == 'word/document.xml') {
         documentXml = utf8.decode(file.content as List<int>);
       } else if (n == 'word/styles.xml') {

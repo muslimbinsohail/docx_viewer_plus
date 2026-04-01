@@ -23,8 +23,6 @@ dependencies:
   webview_flutter: ^4.7.0
   webview_flutter_wkwebview: ^3.13.0
   webview_flutter_android: ^3.16.0
-  # State management
-  provider: ^6.1.1
   # Path utilities
   path: ^1.9.0
   # For base64 encoding of images
