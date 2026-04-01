@@ -1,0 +1,7 @@
+# Exclude the root native app folders. They belong in the example package!
+android/
+ios/
+macos/
+web/
+linux/
+windows/
