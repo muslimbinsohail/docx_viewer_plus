@@ -2,6 +2,7 @@ import 'dart:async';
 // import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'dart:io';
 // import 'package:webview_flutter_android/webview_flutter_android.dart' as android_webview;
 // import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart' as wk_webview;
 
@@ -36,6 +37,7 @@ class EditorWebviewState extends State<EditorWebview> {
   late WebViewController _controller;
   bool _isReady = false;
   Timer? _debounceTimer;
+  String? _tempHtmlPath;
 
   /// Execute JavaScript in the WebView.
   Future<void> executeJavaScript(String js) async {
@@ -85,9 +87,12 @@ class EditorWebviewState extends State<EditorWebview> {
     super.didUpdateWidget(oldWidget);
     // Update HTML if it changed externally (e.g., from service)
     if (oldWidget.html != widget.html && _isReady) {
-      _loadHtml(widget.html);
-    }
+// Load initial HTML
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadHtml(widget.html);
+      });    }
   }
+
 
   @override
   void dispose() {
@@ -158,11 +163,42 @@ class EditorWebviewState extends State<EditorWebview> {
     _loadHtml(widget.html);
   }
   /// Load HTML into the WebView using a data URI.
-  void _loadHtml(String html) {
-    final encoded = Uri.encodeComponent(html);
-    final dataUri = 'data:text/html;charset=utf-8,$encoded';
-    _controller.loadRequest(Uri.parse(dataUri));
+  // void _loadHtml(String html) {
+  //   final encoded = Uri.encodeComponent(html);
+  //   final dataUri = 'data:text/html;charset=utf-8,$encoded';
+  //   _controller.loadRequest(Uri.parse(dataUri));
+  //   setState(() => _isReady = false);
+  // }
+
+  //   Future<void> _loadHtml(String html) async {
+  //   setState(() => _isReady = false);
+
+  //   // Delete previous temp file
+  //   if (_tempHtmlPath != null) {
+  //     try {
+  //       final oldFile = File(_tempHtmlPath!);
+  //       if (await oldFile.exists()) await oldFile.delete();
+  //     } catch (_) {}
+  //   }
+
+  //   // Write HTML to a temp file (avoids 2MB data URI limit on Android)
+  //   final tempDir = await getTemporaryDirectory();
+  //   final tempFile = File('${tempDir.path}/docx_viewer_content.html');
+  //   await tempFile.writeAsString(html, encoding: utf8);
+  //   _tempHtmlPath = tempFile.path;
+
+  //   // Allow file access on Android
+  //   if (_controller.platform is android_webview.AndroidWebViewController) {
+  //     await (_controller.platform as android_webview.AndroidWebViewController)
+  //         .setAllowFileAccess(true);
+  //   }
+
+  //   await _controller.loadRequest(Uri.file(tempFile.path));
+  // }
+
+    Future<void> _loadHtml(String html) async {
     setState(() => _isReady = false);
+    await _controller.loadHtmlString(html);
   }
 
   /// Set up JavaScript listeners for content changes.
