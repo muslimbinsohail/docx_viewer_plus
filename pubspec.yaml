@@ -1,0 +1,39 @@
+name: docx_viewer
+description: A Flutter DOCX Viewer, Editor, and Saver app supporting Android, iOS, and macOS.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # UI
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  # File handling
+  file_picker: ^8.0.0
+  path_provider: ^2.1.2
+  share_plus: ^7.2.2
+  # DOCX parsing (ZIP + XML)
+  archive: ^4.0.2
+  xml: ^6.5.0
+  # WebView for rendering + editing
+  webview_flutter: ^4.7.0
+  webview_flutter_wkwebview: ^3.13.0
+  webview_flutter_android: ^3.16.0
+  # State management
+  provider: ^6.1.1
+  # Path utilities
+  path: ^1.9.0
+  # For base64 encoding of images
+  crypto: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
