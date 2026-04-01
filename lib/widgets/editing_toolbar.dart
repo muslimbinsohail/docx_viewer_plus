@@ -13,79 +13,102 @@ class EditingToolbar extends StatelessWidget {
     if (state != null) action(state);
   }
 
-  EditorWebviewState? get _ws => webViewKey.currentState;
+  // EditorWebviewState? get _ws => webViewKey.currentState;
 
   @override
   Widget build(BuildContext context) {
     final bg = config.toolbarBackgroundColor ?? Theme.of(context).colorScheme.surface;
     final children = <Widget>[];
 
-    if (config.isOptionEnabled(ToolbarOption.undo))
+    if (config.isOptionEnabled(ToolbarOption.undo)) {
       children.add(_btn(context, ToolbarOption.undo, Icons.undo, () => _exec(context, (s) => s.undo())));
-    if (config.isOptionEnabled(ToolbarOption.redo))
+    }
+    if (config.isOptionEnabled(ToolbarOption.redo)) {
       children.add(_btn(context, ToolbarOption.redo, Icons.redo, () => _exec(context, (s) => s.redo())));
+    }
 
     // Text style group
-    if (config.isOptionEnabled(ToolbarOption.bold))
+    if (config.isOptionEnabled(ToolbarOption.bold)) {
       children.add(_btn(context, ToolbarOption.bold, Icons.format_bold, () => _exec(context, (s) => s.formatBold())));
-    if (config.isOptionEnabled(ToolbarOption.italic))
+    }
+    if (config.isOptionEnabled(ToolbarOption.italic)) {
       children.add(_btn(context, ToolbarOption.italic, Icons.format_italic, () => _exec(context, (s) => s.formatItalic())));
-    if (config.isOptionEnabled(ToolbarOption.underline))
+    }
+    if (config.isOptionEnabled(ToolbarOption.underline)) {
       children.add(_btn(context, ToolbarOption.underline, Icons.format_underlined, () => _exec(context, (s) => s.formatUnderline())));
-    if (config.isOptionEnabled(ToolbarOption.strikethrough))
+    }
+    if (config.isOptionEnabled(ToolbarOption.strikethrough)) {
       children.add(_btn(context, ToolbarOption.strikethrough, Icons.strikethrough_s, () => _exec(context, (s) => s.formatStrikethrough())));
+    }
 
     // Alignment group
-    if (config.isOptionEnabled(ToolbarOption.alignLeft))
+    if (config.isOptionEnabled(ToolbarOption.alignLeft)) {
       children.add(_btn(context, ToolbarOption.alignLeft, Icons.format_align_left, () => _exec(context, (s) => s.formatAlignLeft())));
-    if (config.isOptionEnabled(ToolbarOption.alignCenter))
+    }
+    if (config.isOptionEnabled(ToolbarOption.alignCenter)) {
       children.add(_btn(context, ToolbarOption.alignCenter, Icons.format_align_center, () => _exec(context, (s) => s.formatAlignCenter())));
-    if (config.isOptionEnabled(ToolbarOption.alignRight))
+    }
+    if (config.isOptionEnabled(ToolbarOption.alignRight)) {
       children.add(_btn(context, ToolbarOption.alignRight, Icons.format_align_right, () => _exec(context, (s) => s.formatAlignRight())));
-    if (config.isOptionEnabled(ToolbarOption.alignJustify))
+    }
+    if (config.isOptionEnabled(ToolbarOption.alignJustify)) {
       children.add(_btn(context, ToolbarOption.alignJustify, Icons.format_align_justify, () => _exec(context, (s) => s.formatAlignJustify())));
+    }
 
     // Headings
-    if (config.isOptionEnabled(ToolbarOption.heading1))
+    if (config.isOptionEnabled(ToolbarOption.heading1)) {
       children.add(_labelBtn(context, ToolbarOption.heading1, 'H1', () => _exec(context, (s) => s.formatHeading1())));
-    if (config.isOptionEnabled(ToolbarOption.heading2))
+    }
+    if (config.isOptionEnabled(ToolbarOption.heading2)) {
       children.add(_labelBtn(context, ToolbarOption.heading2, 'H2', () => _exec(context, (s) => s.formatHeading2())));
-    if (config.isOptionEnabled(ToolbarOption.heading3))
+    }
+    if (config.isOptionEnabled(ToolbarOption.heading3)) {
       children.add(_labelBtn(context, ToolbarOption.heading3, 'H3', () => _exec(context, (s) => s.formatHeading3())));
+    }
 
     // Lists
-    if (config.isOptionEnabled(ToolbarOption.unorderedList))
+    if (config.isOptionEnabled(ToolbarOption.unorderedList)) {
       children.add(_btn(context, ToolbarOption.unorderedList, Icons.format_list_bulleted, () => _exec(context, (s) => s.insertUnorderedList())));
-    if (config.isOptionEnabled(ToolbarOption.orderedList))
+    }
+    if (config.isOptionEnabled(ToolbarOption.orderedList)) {
       children.add(_btn(context, ToolbarOption.orderedList, Icons.format_list_numbered, () => _exec(context, (s) => s.insertOrderedList())));
-    if (config.isOptionEnabled(ToolbarOption.indent))
+    }
+    if (config.isOptionEnabled(ToolbarOption.indent)) {
       children.add(_btn(context, ToolbarOption.indent, Icons.format_indent_increase, () => _exec(context, (s) => s.indent())));
-    if (config.isOptionEnabled(ToolbarOption.outdent))
+    }
+    if (config.isOptionEnabled(ToolbarOption.outdent)) {
       children.add(_btn(context, ToolbarOption.outdent, Icons.format_indent_decrease, () => _exec(context, (s) => s.outdent())));
+    }
 
     // Colors
-    if (config.isOptionEnabled(ToolbarOption.textColor))
+    if (config.isOptionEnabled(ToolbarOption.textColor)) {
       children.add(_btn(context, ToolbarOption.textColor, Icons.format_color_text,
           () => _showColors(context, false)));
-    if (config.isOptionEnabled(ToolbarOption.highlightColor))
+    }
+    if (config.isOptionEnabled(ToolbarOption.highlightColor)) {
       children.add(_btn(context, ToolbarOption.highlightColor, Icons.highlight,
           () => _showColors(context, true)));
+    }
 
     // Links
-    if (config.isOptionEnabled(ToolbarOption.insertLink))
+    if (config.isOptionEnabled(ToolbarOption.insertLink)) {
       children.add(_btn(context, ToolbarOption.insertLink, Icons.link,
           () => _showLinkDialog(context)));
-    if (config.isOptionEnabled(ToolbarOption.removeLink))
+    }
+    if (config.isOptionEnabled(ToolbarOption.removeLink)) {
       children.add(_btn(context, ToolbarOption.removeLink, Icons.link_off,
           () => _exec(context, (s) => s.removeLink())));
+    }
 
     // Other
-    if (config.isOptionEnabled(ToolbarOption.horizontalRule))
+    if (config.isOptionEnabled(ToolbarOption.horizontalRule)) {
       children.add(_btn(context, ToolbarOption.horizontalRule, Icons.horizontal_rule,
           () => _exec(context, (s) => s.insertHorizontalRule())));
-    if (config.isOptionEnabled(ToolbarOption.clearFormatting))
+    }
+    if (config.isOptionEnabled(ToolbarOption.clearFormatting)) {
       children.add(_btn(context, ToolbarOption.clearFormatting, Icons.format_clear,
           () => _exec(context, (s) => s.clearFormatting())));
+    }
 
     if (children.isEmpty) return const SizedBox.shrink();
 
@@ -101,7 +124,7 @@ class EditingToolbar extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: content,
     );

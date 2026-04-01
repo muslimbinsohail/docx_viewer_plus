@@ -244,8 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openRecent(String p) async {
-    if (await _service.loadFromFile(p) && _service.hasDocument && mounted)
+    if (await _service.loadFromFile(p) && _service.hasDocument && mounted) {
       _go();
+    }
   }
 
   Future<void> _createBlank() async {

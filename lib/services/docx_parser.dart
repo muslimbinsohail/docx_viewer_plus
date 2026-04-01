@@ -366,14 +366,12 @@ class DocxParser {
     if (pPr != null) {
       final ps = _firstDir(pPr, 'pStyle');
       styleId = _attr(ps, 'val');
-      if (styleId != null) {
-        final low = styleId.toLowerCase();
-        if (low.startsWith('heading')) {
-          isH = true;
-          hLvl = int.tryParse(styleId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
-        }
+      final low = styleId.toLowerCase();
+      if (low.startsWith('heading')) {
+        isH = true;
+        hLvl = int.tryParse(styleId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
       }
-      final jc = _firstDir(pPr, 'jc');
+          final jc = _firstDir(pPr, 'jc');
       final jv = _attr(jc, 'val');
       if (jv.isNotEmpty) alignment = jv;
       final np = _firstDir(pPr, 'numPr');
@@ -560,15 +558,17 @@ class DocxParser {
     if (images.containsKey(path)) {
       final ext = path.split('.').last.toLowerCase();
       String mime = 'image/png';
-      if (ext == 'jpg' || ext == 'jpeg')
+      if (ext == 'jpg' || ext == 'jpeg') {
         mime = 'image/jpeg';
-      else if (ext == 'gif')
+      } else if (ext == 'gif') {
         mime = 'image/gif';
-      else if (ext == 'bmp')
+      } else if (ext == 'bmp') {
         mime = 'image/bmp';
-      else if (ext == 'svg')
+      } else if (ext == 'svg') {
         mime = 'image/svg+xml';
-      else if (ext == 'webp') mime = 'image/webp';
+      } else if (ext == 'webp') {
+        mime = 'image/webp';
+      }
       return DocxImage(
           data: images[path]!, mimeType: mime, name: path.split('/').last);
     }

@@ -36,7 +36,7 @@ class DocxPackager {
     final contentTypes = _buildContentTypes(imageList);
 
     // Build _rels/.rels
-    final rootRels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    const rootRels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>''';
@@ -66,9 +66,6 @@ class DocxPackager {
 
     // Encode to ZIP
     final zipData = ZipEncoder().encode(archive);
-    if (zipData == null) {
-      throw const FormatException('Failed to create DOCX archive.');
-    }
     return Uint8List.fromList(zipData);
   }
 

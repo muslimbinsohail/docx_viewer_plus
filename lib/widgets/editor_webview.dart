@@ -2,7 +2,6 @@ import 'dart:async';
 // import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'dart:io';
 // import 'package:webview_flutter_android/webview_flutter_android.dart' as android_webview;
 // import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart' as wk_webview;
 
@@ -37,7 +36,6 @@ class EditorWebviewState extends State<EditorWebview> {
   late WebViewController _controller;
   bool _isReady = false;
   Timer? _debounceTimer;
-  String? _tempHtmlPath;
 
   /// Execute JavaScript in the WebView.
   Future<void> executeJavaScript(String js) async {

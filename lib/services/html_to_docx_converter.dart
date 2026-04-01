@@ -183,7 +183,7 @@ class HtmlToDocxConverter {
         }
       } else if (child is XmlText) {
         final text = child.value;
-        if (text != null && text.trim().isNotEmpty) {
+        if (text.trim().isNotEmpty) {
           _addTextRun(builder, text);
         }
       }
@@ -202,7 +202,7 @@ class HtmlToDocxConverter {
     for (final child in node.children) {
       if (child is XmlText) {
         final text = child.value;
-        if (text != null && text.isNotEmpty) {
+        if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             builder.element('w:rPr', nest: () {
               if (bold) builder.element('w:b');
@@ -226,7 +226,7 @@ class HtmlToDocxConverter {
     for (final child in node.children) {
       if (child is XmlText) {
         final text = child.value;
-        if (text != null && text.isNotEmpty) {
+        if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             if (bold || italic || underline || strike || fontSize != null || fontFamily != null || color != null) {
               builder.element('w:rPr', nest: () {
@@ -267,7 +267,7 @@ class HtmlToDocxConverter {
     for (final child in node.children) {
       if (child is XmlText) {
         final text = child.value;
-        if (text != null && text.isNotEmpty) {
+        if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             builder.element('w:rPr', nest: () {
               if (fontFace != null) {
@@ -293,11 +293,11 @@ class HtmlToDocxConverter {
   }
 
   static void _processAnchor(XmlElement node, XmlBuilder builder, {List<ExtractedImage>? images}) {
-    final href = node.getAttribute('href') ?? '';
+    // final href = node.getAttribute('href') ?? '';
     for (final child in node.children) {
       if (child is XmlText) {
         final text = child.value;
-        if (text != null && text.isNotEmpty) {
+        if (text.isNotEmpty) {
           builder.element('w:hyperlink', attributes: {'r:id': '_html_link'}, nest: () {
             builder.element('w:r', nest: () {
               builder.element('w:rPr', nest: () {
