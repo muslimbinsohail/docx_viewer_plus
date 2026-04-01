@@ -1,7 +1,8 @@
-name: docx_viewer
-description: A Flutter DOCX Viewer, Editor, and Saver app supporting Android, iOS, and macOS.
-publish_to: 'none'
-version: 1.0.0+1
+name: docx_viewer_plus
+description: A highly customizable Flutter DOCX Viewer and Editor package supporting Android, iOS, and macOS.
+version: 1.0.0
+homepage: https://github.com/my-org/docx_viewer_plus
+repository: https://github.com/my-org/docx_viewer_plus
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

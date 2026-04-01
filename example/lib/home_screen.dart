@@ -1,7 +1,5 @@
-import 'package:docx_viewer_plus/models/viewer_configs.dart';
+import 'package:docx_viewer_plus/docx_viewer_plus.dart';
 import 'package:flutter/material.dart';
-import '../services/docx_service.dart';
-import 'docx_viewer_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   /// Global config passed to viewer screens.

@@ -1,5 +1,5 @@
 
-import 'package:docx_viewer_plus/models/viewer_configs.dart';
+import '../models/viewer_configs.dart';
 import 'package:flutter/material.dart';
 import '../services/docx_service.dart';
 import '../widgets/editor_webview.dart';
