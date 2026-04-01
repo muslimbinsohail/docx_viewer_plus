@@ -5,3 +5,11 @@ macos/
 web/
 linux/
 windows/
+build/
+.dart_tool/
+android/
+ios/
+macos/
+example/android/
+example/ios/
+example/macos/
