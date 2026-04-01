@@ -435,22 +435,30 @@ class DocxParser {
     return DocxDocument(body: body, styles: styles, images: images);
   }
 
-    /// Find first child element by local name (ignoring namespace).
-  /// More reliable than findElements with namespace parameter.
-  static XmlElement? _child(XmlElement parent, String name) {
-    for (final child in parent.children.whereType<XmlElement>()) {
-      if (child.localName == name) return child;
-    }
-    return null;
+
+    // Guaranteed element lookup - works on ALL xml package versions
+  static Iterable<XmlElement> _findAll(XmlNode parent, String localName) {
+    return parent.descendants
+        .whereType<XmlElement>()
+        .where((e) => e.localName == localName);
   }
 
-  /// Find all child elements by local name (ignoring namespace).
-  static Iterable<XmlElement> _children(XmlElement parent, String name) {
+  static XmlElement? _findFirst(XmlNode parent, String localName) {
+    return _findAll(parent, localName).firstOrNull;
+  }
+
+  // Direct children only
+  static Iterable<XmlElement> _findDirect(XmlElement parent, String localName) {
     return parent.children
         .whereType<XmlElement>()
-        .where((e) => e.localName == name);
+        .where((e) => e.localName == localName);
   }
 
+  static XmlElement? _findFirstDirect(XmlElement parent, String localName) {
+    return _findDirect(parent, localName).firstOrNull;
+  }
+  
+  
   static Map<String, String> _parseRelationships(String? xml) {
     final Map<String, String> rels = {};
     if (xml == null || xml.isEmpty) return rels;
@@ -478,45 +486,58 @@ class DocxParser {
       for (final style
           in doc.findAllElements('style')) {
         final styleId = style.getAttribute('styleId') ?? '';
-        final nameEl = _child(style, 'name');
+        final nameEl =
+            style.findAllElements('name', namespace: wordNamespace).firstOrNull;
         final name = nameEl?.getAttribute('val') ?? styleId;
-        final basedOn = _child(style, 'basedOn')?.getAttribute('val');
+        final basedOn = style
+            .findAllElements('basedOn', namespace: wordNamespace)
+            .firstOrNull
+            ?.getAttribute('val');
 
-        final pPr = _child(style, 'pPr');
+        final pPr =
+            style.findAllElements('pPr', namespace: wordNamespace).firstOrNull;
         String? alignment;
         if (pPr != null) {
-          final jc = _child(pPr, 'jc');
+          final jc =
+              pPr.findAllElements('jc', namespace: wordNamespace).firstOrNull;
           alignment = jc?.getAttribute('val');
         }
 
-        final rPr = _child(style, 'rPr');
+        final rPr =
+            style.findAllElements('rPr', namespace: wordNamespace).firstOrNull;
         bool bold = false, italic = false, underline = false;
         String? fontSize, fontFamily, fontColor;
         if (rPr != null) {
-          final b = _child(rPr, 'b');
+          final b =
+              rPr.findAllElements('b', namespace: wordNamespace).firstOrNull;
           bold = b != null &&
               (b.getAttribute('val') != '0' &&
                   b.getAttribute('val') != 'false');
           if (b != null && b.getAttribute('val') == null) bold = true;
 
-          final i = _child(rPr, 'i');
+          final i =
+              rPr.findAllElements('i', namespace: wordNamespace).firstOrNull;
           italic = i != null &&
               (i.getAttribute('val') != '0' &&
                   i.getAttribute('val') != 'false');
           if (i != null && i.getAttribute('val') == null) italic = true;
 
-          final u = _child(rPr, 'u');
+          final u =
+              rPr.findAllElements('u', namespace: wordNamespace).firstOrNull;
           underline = u != null && u.getAttribute('val') != 'none';
           if (u != null && u.getAttribute('val') == null) underline = true;
 
-          final sz = _child(rPr, 'sz');
+          final sz =
+              rPr.findAllElements('sz', namespace: wordNamespace).firstOrNull;
           fontSize = sz?.getAttribute('val');
 
-          final rFonts = _child(rPr, 'rFonts');
+          final rFonts =
+              rPr.findAllElements('rFonts', namespace: wordNamespace).firstOrNull;
           fontFamily =
               rFonts?.getAttribute('ascii') ?? rFonts?.getAttribute('hAnsi');
 
-          final color = _child(rPr, 'color');
+          final color =
+              rPr.findAllElements('color', namespace: wordNamespace).firstOrNull;
           fontColor = color?.getAttribute('val');
         }
 
@@ -543,16 +564,32 @@ class DocxParser {
     try {
       final doc = XmlDocument.parse(xml);
       for (final abstractNum
-          in doc.findAllElements('abstractNum')) {
+          in doc.findAllElements('abstractNum', namespace: wordNamespace)) {
         final abstractNumId = abstractNum.getAttribute('abstractNumId') ?? '';
         final levels = <DocxNumberingLevel>[];
         for (final lvl
-            in _children(abstractNum, 'lvl')) {
+            in abstractNum.findAllElements('lvl', namespace: wordNamespace)) {
           final ilvl = lvl.getAttribute('ilvl') ?? '0';
-          final numFmt = _child(lvl, 'numFmt')?.getAttribute('val') ?? 'decimal';
-          final lvlText = _child(lvl, 'lvlText')?.getAttribute('val') ?? '%1.';
-          final lvlJc = _child(lvl, 'lvlJc')?.getAttribute('val') ?? 'left';
-          final start = _child(lvl, 'start')?.getAttribute('val') ?? '1';
+          final numFmt = lvl
+                  .findAllElements('numFmt', namespace: wordNamespace)
+                  .firstOrNull
+                  ?.getAttribute('val') ??
+              'decimal';
+          final lvlText = lvl
+                  .findAllElements('lvlText', namespace: wordNamespace)
+                  .firstOrNull
+                  ?.getAttribute('val') ??
+              '%1.';
+          final lvlJc = lvl
+                  .findAllElements('lvlJc', namespace: wordNamespace)
+                  .firstOrNull
+                  ?.getAttribute('val') ??
+              'left';
+          final start = lvl
+                  .findAllElements('start', namespace: wordNamespace)
+                  .firstOrNull
+                  ?.getAttribute('val') ??
+              '1';
           levels.add(DocxNumberingLevel(
             level: int.tryParse(ilvl) ?? 0,
             numFmt: numFmt,
@@ -578,7 +615,7 @@ class DocxParser {
     try {
       final doc = XmlDocument.parse(xml);
       final body =
-          doc.findAllElements('body').firstOrNull;
+          doc.findAllElements('body', namespace: wordNamespace).firstOrNull;
       if (body == null) return elements;
 
       final Map<String, int> numCounters = {};
@@ -617,9 +654,11 @@ class DocxParser {
     bool isHeading = false;
     int headingLevel = 0;
 
-    final pPr = _child(pEl, 'pPr');
+    final pPr =
+        pEl.findAllElements('pPr', namespace: wordNamespace).firstOrNull;
     if (pPr != null) {
-      final pStyle = _child(pPr, 'pStyle');
+      final pStyle =
+          pPr.findAllElements('pStyle', namespace: wordNamespace).firstOrNull;
       styleId = pStyle?.getAttribute('val');
       if (styleId != null) {
         if (styleId.startsWith('Heading') ||
@@ -629,15 +668,26 @@ class DocxParser {
               int.tryParse(styleId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
         }
       }
-      final jc = _child(pPr, 'jc');
+      // final jc =
+      //     pPr.findAllElements('jc', namespace: wordNamespace).firstOrNull;
+      // alignment = jc?.getAttribute('val');
+      final jc = pPr.findAllElements('jc', namespace: wordNamespace).firstOrNull;
       final jcVal = jc?.getAttribute('val');
       if (jcVal != null && jcVal.isNotEmpty) {
         alignment = jcVal;
       }
-      final numPr = _child(pPr, 'numPr');
+      final numPr =
+          pPr.findAllElements('numPr', namespace: wordNamespace).firstOrNull;
       if (numPr != null) {
-        numId = _child(numPr, 'numId')?.getAttribute('val');
-        ilvl = _child(numPr, 'ilvl')?.getAttribute('val') ?? '0';
+        numId = numPr
+            .findAllElements('numId', namespace: wordNamespace)
+            .firstOrNull
+            ?.getAttribute('val');
+        ilvl = numPr
+                .findAllElements('ilvl', namespace: wordNamespace)
+                .firstOrNull
+                ?.getAttribute('val') ??
+            '0';
       }
     }
 
@@ -710,7 +760,8 @@ class DocxParser {
     Map<String, DocxStyle> styles,
     DocxStyle? parentStyle,
   ) {
-    final rPr = _child(rEl, 'rPr');
+    final rPr =
+        rEl.findAllElements('rPr', namespace: wordNamespace).firstOrNull;
 
     bool bold = parentStyle?.bold ?? false;
     bool italic = parentStyle?.italic ?? false;
@@ -722,61 +773,56 @@ class DocxParser {
     String? backgroundColor;
 
     if (rPr != null) {
-      final b = _child(rPr, 'b');
+      final b = rPr.findAllElements('b', namespace: wordNamespace).firstOrNull;
       if (b != null) {
         bold = b.getAttribute('val') == null ||
             (b.getAttribute('val') != '0' &&
                 b.getAttribute('val') != 'false');
       }
-      final i = _child(rPr, 'i');
+      final i = rPr.findAllElements('i', namespace: wordNamespace).firstOrNull;
       if (i != null) {
         italic = i.getAttribute('val') == null ||
             (i.getAttribute('val') != '0' &&
                 i.getAttribute('val') != 'false');
       }
-      final u = _child(rPr, 'u');
+      final u = rPr.findAllElements('u', namespace: wordNamespace).firstOrNull;
       if (u != null) {
         underline = u.getAttribute('val') != 'none';
         if (u.getAttribute('val') == null) underline = true;
       }
-      final strike = _child(rPr, 'strike');
+      final strike =
+          rPr.findAllElements('strike', namespace: wordNamespace).firstOrNull;
       if (strike != null) {
         strikethrough = strike.getAttribute('val') == null ||
             strike.getAttribute('val') != 'false';
       }
-      final sz = _child(rPr, 'sz');
+      final sz = rPr.findAllElements('sz', namespace: wordNamespace).firstOrNull;
       if (sz != null) fontSize = sz.getAttribute('val');
-      final rFonts = _child(rPr, 'rFonts');
+      final rFonts =
+          rPr.findAllElements('rFonts', namespace: wordNamespace).firstOrNull;
       if (rFonts != null) {
         fontFamily = rFonts.getAttribute('ascii') ??
             rFonts.getAttribute('hAnsi') ??
             fontFamily;
       }
-      final color = _child(rPr, 'color');
+      final color =
+          rPr.findAllElements('color', namespace: wordNamespace).firstOrNull;
       if (color != null) fontColor = color.getAttribute('val');
-      final shd = _child(rPr, 'shd');
+      final shd = rPr.findAllElements('shd', namespace: wordNamespace).firstOrNull;
       if (shd != null) backgroundColor = shd.getAttribute('fill');
     }
 
     final textBuf = StringBuffer();
-    for (final t in _children(rEl, 't')) {
+    for (final t in rEl.findAllElements('t', namespace: wordNamespace)) {
       final preserveSpace = t.getAttribute('xml:space');
-      String textContent = '';
-      for (final node in t.children) {
-        if (node is XmlText) {
-          textContent += node.value;
-        } else if (node is XmlCDATA) {
-          textContent += node.value;
-        }
-      }
       if (preserveSpace == 'preserve') {
-        textBuf.write(textContent);
+        textBuf.write(t.innerText);
       } else {
-        textBuf.write(textContent.replaceAll(RegExp(r'\s+'), ' '));
+        textBuf.write(t.innerText.replaceAll(RegExp(r'\s+'), ' '));
       }
     }
-    for (final br in _children(rEl, 'br')) {
-      final brType = br.getAttribute('w:type');
+    for (final br in rEl.findAllElements('br', namespace: wordNamespace)) {
+      final brType = br.getAttribute('type');
       if (brType == 'page') {
         textBuf.write('\x00PAGEBREAK\x00');
       } else {
@@ -785,9 +831,12 @@ class DocxParser {
     }
 
     DocxImage? image;
-    for (final drawing in _children(rEl, 'drawing')) {
-      for (final inline in drawing.findAllElements('inline')) {
-        for (final blip in inline.findAllElements('blip')) {
+    for (final drawing
+        in rEl.findAllElements('drawing', namespace: wordNamespace)) {
+      for (final inline
+          in drawing.findAllElements('inline', namespace: wpNamespace)) {
+        for (final blip
+            in inline.findAllElements('blip', namespace: drawingNamespace)) {
           final embedId = blip.getAttribute('r:embed') ??
               blip.getAttribute('r:embed') ??
               blip.getAttribute('id');
@@ -817,8 +866,10 @@ class DocxParser {
           }
         }
       }
-      for (final anchor in drawing.findAllElements('anchor')) {
-        for (final blip in anchor.findAllElements('blip')) {
+      for (final anchor
+          in drawing.findAllElements('anchor', namespace: wpNamespace)) {
+        for (final blip
+            in anchor.findAllElements('blip', namespace: drawingNamespace)) {
           final embedId = blip.getAttribute('r:embed') ??
               blip.getAttribute('r:embed') ??
               blip.getAttribute('id');
@@ -902,9 +953,9 @@ class DocxParser {
     Map<String, int> numCounters,
   ) {
     final rows = <DocxTableRow>[];
-    for (final tr in tblEl.findAllElements('tr')) {
+    for (final tr in tblEl.findAllElements('tr', namespace: wordNamespace)) {
       final cells = <DocxTableCell>[];
-      for (final tc in tr.findAllElements('tc')) {
+      for (final tc in tr.findAllElements('tc', namespace: wordNamespace)) {
         final cellElements = <DocxElement>[];
         for (final child in tc.children) {
           if (child is XmlElement) {
@@ -920,16 +971,23 @@ class DocxParser {
         }
         String? gridSpan;
         String? vMerge;
-        final tcPr = _child(tc, 'tcPr');
+        final tcPr =
+            tc.findAllElements('tcPr', namespace: wordNamespace).firstOrNull;
         if (tcPr != null) {
-          final gs = _child(tcPr, 'gridSpan');
+          final gs = tcPr
+              .findAllElements('gridSpan', namespace: wordNamespace)
+              .firstOrNull;
           gridSpan = gs?.getAttribute('val');
-          final vm = _child(tcPr, 'vMerge');
+          final vm = tcPr
+              .findAllElements('vMerge', namespace: wordNamespace)
+              .firstOrNull;
           vMerge = vm?.getAttribute('val') ?? 'continue';
         }
         String? cellShading;
         if (tcPr != null) {
-          final shd = _child(tcPr, 'shd');
+          final shd = tcPr
+              .findAllElements('shd', namespace: wordNamespace)
+              .firstOrNull;
           cellShading = shd?.getAttribute('fill');
         }
         cells.add(DocxTableCell(
