@@ -78,11 +78,61 @@ class DocxToHtmlConverter {
   }
 </style>
 </head>
-<body${editable ? ' contenteditable="true"' : ''} dir="auto">
-''');
+<body${editable ? ' contenteditable="true"' : ' contenteditable="false"'} dir="auto">''');
+
+      // Group consecutive list items into proper <ul>/<ol> wrappers
+    String? pendingListType;
+    int pendingListLevel = 0;
+    final listBuffer = StringBuffer();
 
     for (final element in document.body) {
-      buffer.writeln(_convertElement(element, document));
+      if (element is DocxParagraph && element.listType != null) {
+        final isOrdered = element.listType == 'decimal' ||
+            element.listType == 'lowerLetter' ||
+            element.listType == 'lowerRoman' ||
+            element.listType == 'upperLetter' ||
+            element.listType == 'upperRoman';
+        final currentListType = isOrdered ? 'ol' : 'ul';
+
+        if (pendingListType != null &&
+            (pendingListType != currentListType ||
+                pendingListLevel != element.listLevel)) {
+          listBuffer.writeln('</$pendingListType>');
+          buffer.write(listBuffer.toString());
+          listBuffer.clear();
+          pendingListType = null;
+        }
+
+        if (pendingListType == null) {
+          pendingListType = currentListType;
+          pendingListLevel = element.listLevel;
+          listBuffer.writeln('<$pendingListType>');
+        }
+
+        listBuffer.write(
+            '<li${element.alignment != null ? ' style="text-align: ${_alignmentToCss(element.alignment)}"' : ''}>');
+        for (final run in element.runs) {
+          if (run.image != null) {
+            listBuffer.write(
+                '<img src="data:${run.image!.mimeType};base64,${run.image!.base64}" alt="${run.image!.name}"/>');
+          }
+          listBuffer.write(_formatRun(run));
+        }
+        listBuffer.writeln('</li>');
+      } else {
+        if (pendingListType != null) {
+          listBuffer.writeln('</$pendingListType>');
+          buffer.write(listBuffer.toString());
+          listBuffer.clear();
+          pendingListType = null;
+        }
+        buffer.writeln(_convertElement(element, document));
+      }
+    }
+
+    if (pendingListType != null) {
+      listBuffer.writeln('</$pendingListType>');
+      buffer.write(listBuffer.toString());
     }
 
     buffer.writeln('</body></html>');
@@ -113,7 +163,7 @@ class DocxToHtmlConverter {
     //   html.write('</div>');
     //   return html.toString();
     // }
-        if (para.runs.length == 1 && para.runs.first.image != null) {
+    if (para.runs.length == 1 && para.runs.first.image != null) {
       final img = para.runs.first.image!;
       final align = _alignmentToCss(para.alignment);
       final html =
@@ -131,21 +181,6 @@ class DocxToHtmlConverter {
     if (para.isHeading) {
       final level = para.headingLevel.clamp(1, 6);
       tag = 'h$level';
-    } else if (para.listType != null) {
-      // Lists are handled differently - we return the list item directly
-      final li = StringBuffer('<li');
-      if (para.alignment != null) {
-        li.write(' style="text-align: ${_alignmentToCss(para.alignment)}"');
-      }
-      li.write('>');
-      for (final run in para.runs) {
-        if (run.image != null) {
-          li.write('<img src="data:${run.image!.mimeType};base64,${run.image!.base64}" alt="${run.image!.name}"/>');
-        }
-        li.write(_formatRun(run));
-      }
-      li.write('</li>');
-      return li.toString();
     } else {
       tag = 'p';
     }
@@ -158,7 +193,8 @@ class DocxToHtmlConverter {
 
     for (final run in para.runs) {
       if (run.image != null) {
-        buffer.write('<img src="data:${run.image!.mimeType};base64,${run.image!.base64}" alt="${run.image!.name}"/>');
+        buffer.write(
+            '<img src="data:${run.image!.mimeType};base64,${run.image!.base64}" alt="${run.image!.name}"/>');
       }
       buffer.write(_formatRun(run));
     }
@@ -188,7 +224,8 @@ class DocxToHtmlConverter {
 
     return _formatTextWithStyles(run.text, run);
   }
-    static String _formatTextWithStyles(String text, DocxRun run) {
+
+  static String _formatTextWithStyles(String text, DocxRun run) {
     final styles = <String, String>{};
     if (run.bold) styles['font-weight'] = 'bold';
     if (run.italic) styles['font-style'] = 'italic';
@@ -207,7 +244,7 @@ class DocxToHtmlConverter {
     }
     if (run.fontColor != null) {
       final color = run.fontColor!;
-      if (color != 'auto' && color != '000000' && color.isNotEmpty) {
+      if (color != 'auto' && color.isNotEmpty) {
         styles['color'] = '#$color';
       }
     }
@@ -227,6 +264,7 @@ class DocxToHtmlConverter {
     }
     return escaped;
   }
+
   /// Convert a table to HTML.
   static String _convertTable(DocxTable table, DocxDocument document) {
     final buffer = StringBuffer('<table');
@@ -247,7 +285,10 @@ class DocxToHtmlConverter {
           if (cell.rowSpan > 1) {
             attrs.write(' rowspan="${cell.rowSpan}"');
           }
-          if (cell.shading != null && cell.shading != 'auto' && cell.shading != 'FFFFFF' && cell.shading != 'ffffff') {
+          if (cell.shading != null &&
+              cell.shading != 'auto' &&
+              cell.shading != 'FFFFFF' &&
+              cell.shading != 'ffffff') {
             attrs.write(' style="background-color: #${cell.shading}"');
           }
           buffer.writeln('<td$attrs>');
