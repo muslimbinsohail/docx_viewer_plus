@@ -26,18 +26,6 @@ class DocxViewerConfig {
   /// Custom labels for tooltips and UI strings.
   final DocxViewerStrings strings;
 
-  /// Whether to show the save button in app bar.
-  final bool showSaveButton;
-
-  /// Whether to show the share button in app bar.
-  final bool showShareButton;
-
-  /// Whether to show the toggle toolbar button.
-  final bool showToggleToolbar;
-
-  /// Whether to show the file name in app bar.
-  final bool showFileName;
-
   /// Callback when user taps save.
   final Future<String?> Function()? onSave;
 
@@ -59,10 +47,6 @@ class DocxViewerConfig {
     this.iconSize = 20,
     this.toolbarBackgroundColor,
     this.strings = const DocxViewerStrings(),
-    this.showSaveButton = true,
-    this.showShareButton = true,
-    this.showToggleToolbar = true,
-    this.showFileName = true,
     this.onSave,
     this.onContentChanged,
     this.locale = 'en',
@@ -78,10 +62,6 @@ class DocxViewerConfig {
     double? iconSize,
     Color? toolbarBackgroundColor,
     DocxViewerStrings? strings,
-    bool? showSaveButton,
-    bool? showShareButton,
-    bool? showToggleToolbar,
-    bool? showFileName,
     Future<String?> Function()? onSave,
     void Function(String html)? onContentChanged,
     String? locale,
@@ -97,10 +77,6 @@ class DocxViewerConfig {
       toolbarBackgroundColor:
           toolbarBackgroundColor ?? this.toolbarBackgroundColor,
       strings: strings ?? this.strings,
-      showSaveButton: showSaveButton ?? this.showSaveButton,
-      showShareButton: showShareButton ?? this.showShareButton,
-      showToggleToolbar: showToggleToolbar ?? this.showToggleToolbar,
-      showFileName: showFileName ?? this.showFileName,
       onSave: onSave ?? this.onSave,
       onContentChanged: onContentChanged ?? this.onContentChanged,
       locale: locale ?? this.locale,
@@ -158,107 +134,58 @@ enum ToolbarOption {
 }
 
 /// Customizable strings for UI labels.
+/// 
 class DocxViewerStrings {
-  final String appName;
-  final String openFile;
-  final String createBlank;
   final String save;
-  final String share;
-  final String saved;
-  final String ready;
-  final String unsavedChanges;
-  final String hideToolbar;
-  final String showToolbar;
+  final String cancel;
+  final String insert;
   final String insertLinkTitle;
   final String insertLinkHint;
   final String insertLinkPlaceholder;
-  final String insert;
-  final String cancel;
   final String textColorTitle;
   final String highlightColorTitle;
-  final String noFileLoaded;
-  final String fileLoadError;
-  final String recentFiles;
-  final String wordCount;
 
   const DocxViewerStrings({
-    this.appName = 'DOCX Viewer & Editor',
-    this.openFile = 'Open DOCX File',
-    this.createBlank = 'Create New Blank Document',
     this.save = 'Save',
-    this.share = 'Share',
-    this.saved = 'Saved',
-    this.ready = 'Ready',
-    this.unsavedChanges = 'Unsaved changes',
-    this.hideToolbar = 'Hide Toolbar',
-    this.showToolbar = 'Show Toolbar',
+    this.cancel = 'Cancel',
+    this.insert = 'Insert',
     this.insertLinkTitle = 'Insert Link',
     this.insertLinkHint = 'https://example.com',
     this.insertLinkPlaceholder = 'URL',
-    this.insert = 'Insert',
-    this.cancel = 'Cancel',
     this.textColorTitle = 'Text Color',
     this.highlightColorTitle = 'Highlight Color',
-    this.noFileLoaded = 'No document loaded.',
-    this.fileLoadError = 'Failed to load file.',
-    this.recentFiles = 'Recent Files',
-    this.wordCount = 'Words',
   });
 
-  /// Arabic strings
   static const DocxViewerStrings arabic = DocxViewerStrings(
-    appName: 'عارض ومحرر DOCX',
-    openFile: 'فتح ملف DOCX',
-    createBlank: 'إنشاء مستند جديد',
     save: 'حفظ',
-    share: 'مشاركة',
-    saved: 'تم الحفظ',
-    ready: 'جاهز',
-    unsavedChanges: 'تغييرات غير محفوظة',
-    hideToolbar: 'إخفاء شريط الأدوات',
-    showToolbar: 'إظهار شريط الأدوات',
+    cancel: 'إلغاء',
+    insert: 'إدراج',
     insertLinkTitle: 'إدراج رابط',
     insertLinkHint: 'https://example.com',
     insertLinkPlaceholder: 'الرابط',
-    insert: 'إدراج',
-    cancel: 'إلغاء',
     textColorTitle: 'لون النص',
     highlightColorTitle: 'لون التظليل',
-    noFileLoaded: 'لم يتم تحميل مستند.',
-    fileLoadError: 'فشل تحميل الملف.',
-    recentFiles: 'الملفات الأخيرة',
-    wordCount: 'كلمات',
   );
 
-  /// Urdu strings
   static const DocxViewerStrings urdu = DocxViewerStrings(
-    appName: 'DOCX ویور اور ایڈیٹر',
-    openFile: 'DOCX فائل کھولیں',
-    createBlank: 'نیا دستاویز بنائیں',
     save: 'محفوظ کریں',
-    share: 'شیئر کریں',
-    saved: 'محفوظ ہو گیا',
-    ready: 'تیار',
-    unsavedChanges: 'غیر محفوظ تبدیلیاں',
-    insertLinkTitle: 'لنک درج کریں',
-    insert: 'درج کریں',
     cancel: 'منسوخ',
+    insert: 'درج کریں',
+    insertLinkTitle: 'لنک درج کریں',
+    insertLinkHint: 'https://example.com',
+    insertLinkPlaceholder: 'رابطہ',
     textColorTitle: 'ٹیکسٹ کا رنگ',
     highlightColorTitle: 'ہائی لائٹ رنگ',
   );
 
-  /// Spanish strings
   static const DocxViewerStrings spanish = DocxViewerStrings(
-    appName: 'Visor y Editor DOCX',
-    openFile: 'Abrir archivo DOCX',
-    createBlank: 'Crear documento en blanco',
     save: 'Guardar',
-    share: 'Compartir',
-    saved: 'Guardado',
-    ready: 'Listo',
-    unsavedChanges: 'Cambios sin guardar',
-    insertLinkTitle: 'Insertar enlace',
-    insert: 'Insertar',
     cancel: 'Cancelar',
+    insert: 'Insertar',
+    insertLinkTitle: 'Insertar enlace',
+    insertLinkHint: 'https://example.com',
+    insertLinkPlaceholder: 'URL',
+    textColorTitle: 'Color de texto',
+    highlightColorTitle: 'Color de resaltado',
   );
 }

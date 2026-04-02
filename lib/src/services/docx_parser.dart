@@ -178,7 +178,7 @@ class DocxParser {
       .toList();
 
   static XmlElement? _firstDir(XmlElement? el, String name) =>
-      _direct(el!, name).firstOrNull;
+      el == null ? null : _direct(el, name).firstOrNull;
 
   static String _textOf(XmlElement el) =>
       el.children.whereType<XmlText>().map((t) => t.value).join();
@@ -201,7 +201,6 @@ class DocxParser {
 
     for (final file in archive) {
       final n = file.name;
-      debugPrint("%%%%%%%%&&&&&&&&&& $n &&&&&&&&&&&&&&**************");
       if (n == 'word/document.xml') {
         documentXml = utf8.decode(file.content as List<int>);
       } else if (n == 'word/styles.xml') {
@@ -301,6 +300,35 @@ class DocxParser {
     return m;
   }
 
+    /// Resolve style inheritance chain (basedOn).
+  static DocxStyle? resolveStyle(
+      Map<String, DocxStyle> styles, String? styleId) {
+    if (styleId == null || styleId.isEmpty) return null;
+    final seen = <String>{};
+    DocxStyle? current = styles[styleId];
+    DocxStyle? merged;
+    while (current != null) {
+      if (seen.contains(current.styleId)) break;
+      seen.add(current.styleId);
+      merged = DocxStyle(
+        name: merged?.name ?? current.name,
+        styleId: merged?.styleId ?? current.styleId,
+        basedOn: merged?.basedOn ?? current.basedOn,
+        bold: merged?.bold ?? current.bold,
+        italic: merged?.italic ?? current.italic,
+        underline: merged?.underline ?? current.underline,
+        fontSize: merged?.fontSize ?? current.fontSize,
+        fontFamily: merged?.fontFamily ?? current.fontFamily,
+        fontColor: merged?.fontColor ?? current.fontColor,
+        alignment: merged?.alignment ?? current.alignment,
+      );
+      final parent = styles[current.basedOn];
+      if (parent == null || parent.styleId == current.styleId) break;
+      current = parent;
+    }
+    return merged;
+  }
+
   static Map<String, List<DocxNumberingLevel>> _parseNum(String xml) {
     final m = <String, List<DocxNumberingLevel>>{};
     if (xml.isEmpty) return m;
@@ -336,12 +364,17 @@ class DocxParser {
       final doc = XmlDocument.parse(xml);
       final body = _first(doc.rootElement, 'body');
       if (body == null) return els;
-      final ctrs = <String, int>{};
-      for (final c in _direct(body, 'p')) {
-        els.add(_parseP(c, rels, images, styles, num, ctrs));
-      }
-      for (final c in _direct(body, 'tbl')) {
-        els.add(_parseTbl(c, rels, images, styles, num, ctrs));
+            final ctrs = <String, int>{};
+      for (final c in body.children.whereType<XmlElement>()) {
+        try {
+          if (c.localName == 'p') {
+            els.add(_parseP(c, rels, images, styles, num, ctrs));
+          } else if (c.localName == 'tbl') {
+            els.add(_parseTbl(c, rels, images, styles, num, ctrs));
+          }
+        } catch (e) {
+          debugPrint('Element parse error: $e');
+        }
       }
     } catch (e) {
       debugPrint('Body parse error: $e');
@@ -371,7 +404,7 @@ class DocxParser {
         isH = true;
         hLvl = int.tryParse(styleId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
       }
-          final jc = _firstDir(pPr, 'jc');
+      final jc = _firstDir(pPr, 'jc');
       final jv = _attr(jc, 'val');
       if (jv.isNotEmpty) alignment = jv;
       final np = _firstDir(pPr, 'numPr');
@@ -381,7 +414,7 @@ class DocxParser {
       }
     }
 
-    final sty = styles[styleId];
+    final sty = resolveStyle(styles, styleId);
     if (sty != null && alignment == null) alignment = sty.alignment;
 
     for (final c in pEl.children.whereType<XmlElement>()) {
@@ -400,6 +433,7 @@ class DocxParser {
             bold: run.bold,
             italic: run.italic,
             underline: run.underline,
+            strikethrough: run.strikethrough,
             fontSize: run.fontSize,
             fontFamily: run.fontFamily,
             fontColor: run.fontColor,

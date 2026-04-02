@@ -1,14 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import '../utils/isolate_tasks.dart';
 import 'docx_parser.dart';
-import 'docx_to_html_converter.dart';
-import 'docx_packager.dart';
 
-/// Central service — uses Flutter's built-in ChangeNotifier (no Provider needed).
+/// Central service — uses Flutter's built-in ChangeNotifier.
 class DocxService extends ChangeNotifier {
   DocxDocument? _document;
   String _html = '';
@@ -17,6 +14,7 @@ class DocxService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isModified = false;
   String _errorMessage = '';
+  String _loadingMessage = '';
 
   DocxDocument? get document => _document;
   String get html => _html;
@@ -26,70 +24,69 @@ class DocxService extends ChangeNotifier {
   bool get isModified => _isModified;
   String get errorMessage => _errorMessage;
   bool get hasDocument => _document != null;
+  String get loadingMessage => _loadingMessage;
 
-  Future<bool> loadFile() async {
-    _setLoading(true);
-    _errorMessage = '';
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['docx','doc'],
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) {
-        _setLoading(false);
-        return false;
-      }
-      final file = result.files.first;
-      if (file.bytes == null) {
-        _errorMessage = 'Could not read file data.';
-        _setLoading(false);
-        notifyListeners();
-        return false;
-      }
-      _fileName = file.name;
-      _originalFileBytes = file.bytes;
-      _parseAndConvert(file.bytes!);
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _errorMessage = 'Failed to load file: $e';
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> loadFromFile(String filePath) async {
-    _setLoading(true);
+  /// Load a .docx file from a file path.
+  Future<bool> loadFromPath(String filePath) async {
+    _setLoading(true, 'Reading file...');
     _errorMessage = '';
     try {
       final file = File(filePath);
       if (!await file.exists()) {
         _errorMessage = 'File not found: $filePath';
         _setLoading(false);
+        notifyListeners();
         return false;
       }
       final bytes = await file.readAsBytes();
       _fileName = filePath.split('/').last;
       _originalFileBytes = bytes;
-      _parseAndConvert(bytes);
-      _setLoading(false);
+      await _parseAndConvert(bytes);
       return true;
     } catch (e) {
       _errorMessage = 'Failed to load file: $e';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
 
-  void _parseAndConvert(Uint8List bytes) {
+  /// Load a .docx from raw bytes.
+  Future<bool> loadFromBytes(Uint8List bytes,
+      {String fileName = 'document.docx'}) async {
+    _setLoading(true, 'Reading data...');
+    _errorMessage = '';
     try {
-      _document = DocxParser.parse(bytes);
-      _html = DocxToHtmlConverter.convert(_document!, editable: true);
+      _fileName = fileName;
+      _originalFileBytes = bytes;
+      await _parseAndConvert(bytes);
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to load file: $e';
+      _setLoading(false);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> _parseAndConvert(Uint8List bytes) async {
+    try {
+      _loadingMessage = 'Parsing document...';
+      notifyListeners();
+      _document = await parseDocxInIsolate(bytes);
+
+      _loadingMessage = 'Rendering...';
+      notifyListeners();
+      _html = await convertToHtmlInIsolate(_document!, editable: true);
+
+      _loadingMessage = '';
       _isModified = false;
+      _setLoading(false);
       notifyListeners();
     } catch (e) {
+      _loadingMessage = '';
       _errorMessage = 'Failed to parse DOCX: $e';
+      _setLoading(false);
       notifyListeners();
     }
   }
@@ -107,13 +104,15 @@ class DocxService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> saveDocx({String? outputPath}) async {
-    if (_html.isEmpty) return null;
-    _setLoading(true);
+  /// Save current content as .docx. Returns saved file path or null.
+  Future<String?> saveDocx({String? outputPath, String? htmlOverride}) async {
+    final html = htmlOverride ?? _html;
+    if (html.isEmpty) return null;
+    _setLoading(true, 'Saving...');
     _errorMessage = '';
     try {
       final docxBytes =
-          DocxPackager.createDocx(_html, originalFileName: _fileName);
+          await packageDocxInIsolate(html, originalFileName: _fileName);
       String savePath;
       if (outputPath != null) {
         savePath = outputPath;
@@ -139,14 +138,20 @@ class DocxService extends ChangeNotifier {
     }
   }
 
-  Future<void> shareDocx() async {
-    final path = await saveDocx();
-    if (path != null) {
-      await Share.shareXFiles([XFile(path)], text: 'Sharing: $_fileName');
+  /// Get DOCX bytes directly (for custom sharing/saving).
+  Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
+    final html = htmlOverride ?? _html;
+    if (html.isEmpty) return null;
+    try {
+      return await packageDocxInIsolate(html, originalFileName: _fileName);
+    } catch (e, stack) {
+      print('getDocxBytes error: $e');
+      print('stack: $stack');
+      _errorMessage = 'Failed to package DOCX: $e';
+      notifyListeners();
+      return null;
     }
   }
-
-  int get htmlByteCount => _html.length;
 
   void reset() {
     _document = null;
@@ -155,12 +160,15 @@ class DocxService extends ChangeNotifier {
     _originalFileBytes = null;
     _isModified = false;
     _errorMessage = '';
+    _loadingMessage = '';
     _setLoading(false);
     notifyListeners();
   }
 
-  void _setLoading(bool value) {
+  void _setLoading(bool value, [String message = '']) {
     _isLoading = value;
+    _loadingMessage = value ? message : '';
+    if (!value) _loadingMessage = '';
     notifyListeners();
   }
 }

@@ -49,10 +49,13 @@ class EditorWebviewState extends State<EditorWebview> {
   Future<String?> getHtmlContent() async {
     if (!_isReady) return null;
     try {
-      final result = await _controller.runJavaScriptReturningResult('document.documentElement.outerHTML');
-      // The result comes back as a quoted string
+      final result = await _controller
+          .runJavaScriptReturningResult('document.documentElement.outerHTML');
       String html = result.toString();
+      // Strip outer quotes if present (JSON string encoding)
       if (html.startsWith('"') && html.endsWith('"')) {
+        html = html.substring(1, html.length - 1);
+      } else if (html.startsWith("'") && html.endsWith("'")) {
         html = html.substring(1, html.length - 1);
       }
       return _unescapeJs(html);
@@ -66,9 +69,14 @@ class EditorWebviewState extends State<EditorWebview> {
   String _unescapeJs(String s) {
     return s
         .replaceAll(r'\"', '"')
-        .replaceAll(r'\\', r'\')
         .replaceAll(r'\n', '\n')
-        .replaceAll(r'\t', '\t');
+        .replaceAll(r'\t', '\t')
+        .replaceAll(r'\r', '\r')
+        .replaceAllMapped(
+          RegExp(r'\\u([0-9a-fA-F]{4})'),
+          (m) => String.fromCharCode(int.parse(m.group(1)!, radix: 16)),
+        )
+        .replaceAll(r'\\', r'\');
   }
 
   @override
@@ -85,16 +93,17 @@ class EditorWebviewState extends State<EditorWebview> {
 // Load initial HTML
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadHtml(widget.html);
-      });    }
+      });
+    }
   }
-
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
     super.dispose();
   }
-   void _initWebView() {
+
+  void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
@@ -119,8 +128,9 @@ class EditorWebviewState extends State<EditorWebview> {
     // Load initial HTML
     _loadHtml(widget.html);
   }
+
   /// Load HTML into the WebView using a data URI.
-    Future<void> _loadHtml(String html) async {
+  Future<void> _loadHtml(String html) async {
     setState(() => _isReady = false);
     await _controller.loadHtmlString(html);
   }
@@ -157,11 +167,13 @@ class EditorWebviewState extends State<EditorWebview> {
       });
 
       // Prevent default link navigation
-      document.addEventListener('click', function(e) {
+       document.addEventListener('click', function(e) {
         if (e.target.tagName === 'A') {
           e.preventDefault();
         }
       });
+      // Ensure body is focused for execCommand to work
+      document.body.focus();
     ''');
   }
 
@@ -178,41 +190,59 @@ class EditorWebviewState extends State<EditorWebview> {
 
   // === Toolbar Actions ===
 
-  Future<void> formatBold() => executeJavaScript('document.execCommand("bold", false, null)');
-  Future<void> formatItalic() => executeJavaScript('document.execCommand("italic", false, null)');
-  Future<void> formatUnderline() => executeJavaScript('document.execCommand("underline", false, null)');
-  Future<void> formatStrikethrough() => executeJavaScript('document.execCommand("strikeThrough", false, null)');
+  Future<void> formatBold() =>
+      executeJavaScript('document.execCommand("bold", false, null)');
+  Future<void> formatItalic() =>
+      executeJavaScript('document.execCommand("italic", false, null)');
+  Future<void> formatUnderline() =>
+      executeJavaScript('document.execCommand("underline", false, null)');
+  Future<void> formatStrikethrough() =>
+      executeJavaScript('document.execCommand("strikeThrough", false, null)');
 
-  Future<void> formatAlignLeft() => executeJavaScript('document.execCommand("justifyLeft", false, null)');
-  Future<void> formatAlignCenter() => executeJavaScript('document.execCommand("justifyCenter", false, null)');
-  Future<void> formatAlignRight() => executeJavaScript('document.execCommand("justifyRight", false, null)');
-  Future<void> formatAlignJustify() => executeJavaScript('document.execCommand("justifyFull", false, null)');
+  Future<void> formatAlignLeft() =>
+      executeJavaScript('document.execCommand("justifyLeft", false, null)');
+  Future<void> formatAlignCenter() =>
+      executeJavaScript('document.execCommand("justifyCenter", false, null)');
+  Future<void> formatAlignRight() =>
+      executeJavaScript('document.execCommand("justifyRight", false, null)');
+  Future<void> formatAlignJustify() =>
+      executeJavaScript('document.execCommand("justifyFull", false, null)');
 
-  Future<void> insertUnorderedList() => executeJavaScript('document.execCommand("insertUnorderedList", false, null)');
-  Future<void> insertOrderedList() => executeJavaScript('document.execCommand("insertOrderedList", false, null)');
+  Future<void> insertUnorderedList() => executeJavaScript(
+      'document.execCommand("insertUnorderedList", false, null)');
+  Future<void> insertOrderedList() => executeJavaScript(
+      'document.execCommand("insertOrderedList", false, null)');
 
-  Future<void> formatHeading1() => executeJavaScript('document.execCommand("formatBlock", false, "h1")');
-  Future<void> formatHeading2() => executeJavaScript('document.execCommand("formatBlock", false, "h2")');
-  Future<void> formatHeading3() => executeJavaScript('document.execCommand("formatBlock", false, "h3")');
-  Future<void> formatParagraph() => executeJavaScript('document.execCommand("formatBlock", false, "p")');
+  Future<void> formatHeading1() =>
+      executeJavaScript('document.execCommand("formatBlock", false, "h1")');
+  Future<void> formatHeading2() =>
+      executeJavaScript('document.execCommand("formatBlock", false, "h2")');
+  Future<void> formatHeading3() =>
+      executeJavaScript('document.execCommand("formatBlock", false, "h3")');
+  Future<void> formatParagraph() =>
+      executeJavaScript('document.execCommand("formatBlock", false, "p")');
 
-  Future<void> indent() => executeJavaScript('document.execCommand("indent", false, null)');
-  Future<void> outdent() => executeJavaScript('document.execCommand("outdent", false, null)');
+  Future<void> indent() =>
+      executeJavaScript('document.execCommand("indent", false, null)');
+  Future<void> outdent() =>
+      executeJavaScript('document.execCommand("outdent", false, null)');
 
-  Future<void> undo() => executeJavaScript('document.execCommand("undo", false, null)');
-  Future<void> redo() => executeJavaScript('document.execCommand("redo", false, null)');
+  Future<void> undo() =>
+      executeJavaScript('document.execCommand("undo", false, null)');
+  Future<void> redo() =>
+      executeJavaScript('document.execCommand("redo", false, null)');
 
   Future<void> setFontSize(int sizePt) =>
       executeJavaScript('document.execCommand("fontSize", false, "$sizePt")');
 
-  Future<void> setFontColor(String hexColor) =>
-      executeJavaScript('document.execCommand("foreColor", false, "$hexColor")');
+  Future<void> setFontColor(String hexColor) => executeJavaScript(
+      'document.execCommand("foreColor", false, "$hexColor")');
 
-  Future<void> setHighlightColor(String hexColor) =>
-      executeJavaScript('document.execCommand("hiliteColor", false, "$hexColor")');
+  Future<void> setHighlightColor(String hexColor) => executeJavaScript(
+      'document.execCommand("hiliteColor", false, "$hexColor")');
 
-  Future<void> insertHorizontalRule() =>
-      executeJavaScript('document.execCommand("insertHorizontalRule", false, null)');
+  Future<void> insertHorizontalRule() => executeJavaScript(
+      'document.execCommand("insertHorizontalRule", false, null)');
 
   Future<void> insertLink(String url) =>
       executeJavaScript('document.execCommand("createLink", false, "$url")');

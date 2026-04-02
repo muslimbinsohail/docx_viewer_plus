@@ -53,12 +53,18 @@ class DocxPackager {
     // Create the archive
     final archive = Archive();
 
-    archive.addFile(ArchiveFile('[Content_Types].xml', contentTypes.length, contentTypes.codeUnits));
-    archive.addFile(ArchiveFile('_rels/.rels', rootRels.length, rootRels.codeUnits));
-    archive.addFile(ArchiveFile('word/document.xml', bodyXml.length, bodyXml.codeUnits));
-    archive.addFile(ArchiveFile('word/_rels/document.xml.rels', docRels.length, docRels.codeUnits));
-    archive.addFile(ArchiveFile('word/styles.xml', styles.length, styles.codeUnits));
-    archive.addFile(ArchiveFile('word/numbering.xml', numbering.length, numbering.codeUnits));
+    archive.addFile(ArchiveFile(
+        '[Content_Types].xml', contentTypes.length, contentTypes.codeUnits));
+    archive.addFile(
+        ArchiveFile('_rels/.rels', rootRels.length, rootRels.codeUnits));
+    archive.addFile(
+        ArchiveFile('word/document.xml', bodyXml.length, bodyXml.codeUnits));
+    archive.addFile(ArchiveFile(
+        'word/_rels/document.xml.rels', docRels.length, docRels.codeUnits));
+    archive.addFile(
+        ArchiveFile('word/styles.xml', styles.length, styles.codeUnits));
+    archive.addFile(ArchiveFile(
+        'word/numbering.xml', numbering.length, numbering.codeUnits));
 
     for (final imgFile in imageFiles) {
       archive.addFile(imgFile);
@@ -70,7 +76,8 @@ class DocxPackager {
   }
 
   static String _buildContentTypes(List<ExtractedImage> images) {
-    final buffer = StringBuffer('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final buffer =
+        StringBuffer('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -87,7 +94,8 @@ class DocxPackager {
         addedExtensions.add(ext);
         String contentType = 'image/$ext';
         if (ext == 'jpg') contentType = 'image/jpeg';
-        buffer.writeln('  <Default Extension="$ext" ContentType="$contentType"/>');
+        buffer.writeln(
+            '  <Default Extension="$ext" ContentType="$contentType"/>');
       }
     }
 
@@ -96,7 +104,8 @@ class DocxPackager {
   }
 
   static String _buildDocumentRels(List<ExtractedImage> images) {
-    final buffer = StringBuffer('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final buffer =
+        StringBuffer('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
