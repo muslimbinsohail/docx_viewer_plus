@@ -1,9 +1,6 @@
 import 'dart:async';
-// import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-// import 'package:webview_flutter_android/webview_flutter_android.dart' as android_webview;
-// import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart' as wk_webview;
 
 /// A WebView widget that renders HTML content and supports contentEditable
 /// for inline editing. Provides JavaScript ↔ Dart communication via channels.
@@ -97,44 +94,6 @@ class EditorWebviewState extends State<EditorWebview> {
     _debounceTimer?.cancel();
     super.dispose();
   }
-
-  // void _initWebView() {
-  //   // late final PlatformWebViewControllerCreationParams params;
-  //   // if (defaultTargetPlatform == TargetPlatform.android) {
-  //   //   params = android_webview.AndroidWebViewControllerCreationParams();
-  //   // } else if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
-  //   //   params = wk_webview.WKWebViewControllerCreationParams();
-  //   // } else {
-  //   //   params = const PlatformWebViewControllerCreationParams();
-  //   // }
-
-  //     _controller = WebViewController()
-  //     ..setJavaScriptMode(JavaScriptMode.unrestricted);
-
-  //   _controller = WebViewController.fromPlatformCreationParams(params)
-  //     ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  //     ..setNavigationDelegate(
-  //       NavigationDelegate(
-  //         onPageFinished: (_) {
-  //           setState(() => _isReady = true);
-  //           _setupEditingListeners();
-  //           if (widget.initialJs != null) {
-  //             _controller.runJavaScript(widget.initialJs!);
-  //           }
-  //           widget.onReady?.call();
-  //         },
-  //       ),
-  //     )
-  //     ..addJavaScriptChannel(
-  //       'FlutterBridge',
-  //       onMessageReceived: (message) {
-  //         _handleBridgeMessage(message.message);
-  //       },
-  //     );
-
-  //   // Load initial HTML
-  //   _loadHtml(widget.html);
-  // }
    void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -161,39 +120,6 @@ class EditorWebviewState extends State<EditorWebview> {
     _loadHtml(widget.html);
   }
   /// Load HTML into the WebView using a data URI.
-  // void _loadHtml(String html) {
-  //   final encoded = Uri.encodeComponent(html);
-  //   final dataUri = 'data:text/html;charset=utf-8,$encoded';
-  //   _controller.loadRequest(Uri.parse(dataUri));
-  //   setState(() => _isReady = false);
-  // }
-
-  //   Future<void> _loadHtml(String html) async {
-  //   setState(() => _isReady = false);
-
-  //   // Delete previous temp file
-  //   if (_tempHtmlPath != null) {
-  //     try {
-  //       final oldFile = File(_tempHtmlPath!);
-  //       if (await oldFile.exists()) await oldFile.delete();
-  //     } catch (_) {}
-  //   }
-
-  //   // Write HTML to a temp file (avoids 2MB data URI limit on Android)
-  //   final tempDir = await getTemporaryDirectory();
-  //   final tempFile = File('${tempDir.path}/docx_viewer_content.html');
-  //   await tempFile.writeAsString(html, encoding: utf8);
-  //   _tempHtmlPath = tempFile.path;
-
-  //   // Allow file access on Android
-  //   if (_controller.platform is android_webview.AndroidWebViewController) {
-  //     await (_controller.platform as android_webview.AndroidWebViewController)
-  //         .setAllowFileAccess(true);
-  //   }
-
-  //   await _controller.loadRequest(Uri.file(tempFile.path));
-  // }
-
     Future<void> _loadHtml(String html) async {
     setState(() => _isReady = false);
     await _controller.loadHtmlString(html);

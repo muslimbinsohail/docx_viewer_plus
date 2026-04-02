@@ -168,51 +168,6 @@ class DocxToHtmlConverter {
   }
 
   /// Format a single run as HTML with inline styles.
-  // static String _formatRun(DocxRun run) {
-  //   if (run.text.isEmpty) return '';
-
-  //   final styles = <String, String>{};
-  //   if (run.bold) styles['font-weight'] = 'bold';
-  //   if (run.italic) styles['font-style'] = 'italic';
-  //   if (run.underline) styles['text-decoration'] = 'underline';
-  //   if (run.strikethrough) {
-  //     styles['text-decoration'] = styles.containsKey('text-decoration')
-  //         ? '${styles['text-decoration']} line-through'
-  //         : 'line-through';
-  //   }
-  //   if (run.fontSize != null) {
-  //     // Font size in OOXML is in half-points. Convert to pt.
-  //     final pt = (int.tryParse(run.fontSize!) ?? 22) / 2;
-  //     styles['font-size'] = '${pt}pt';
-  //   }
-  //   if (run.fontFamily != null) {
-  //     styles['font-family'] = "'${run.fontFamily}', sans-serif";
-  //   }
-  //   if (run.fontColor != null) {
-  //     final color = run.fontColor!;
-  //     // Handle theme colors and auto
-  //     if (color != 'auto' && color != '000000' && color.isNotEmpty) {
-  //       styles['color'] = '#$color';
-  //     }
-  //   }
-  //   if (run.backgroundColor != null && run.backgroundColor != 'auto') {
-  //     styles['background-color'] = '#${run.backgroundColor}';
-  //   }
-
-  //   final styleStr = styles.entries.map((e) => '${e.key}: ${e.value}').join('; ');
-  //   final text = _escapeHtml(run.text);
-
-  //   if (run.href != null) {
-  //     return '<a href="${_escapeHtml(run.href!)}" style="$styleStr">$text</a>';
-  //   }
-
-  //   if (styles.isNotEmpty) {
-  //     return '<span style="$styleStr">$text</span>';
-  //   }
-
-  //   return text;
-  // }
-
   static String _formatRun(DocxRun run) {
     if (run.text.isEmpty) return '';
 
