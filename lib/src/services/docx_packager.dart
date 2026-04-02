@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
+import 'package:docx_viewer_plus/src/sanitizers/html_sanitizer.dart';
 import 'html_to_docx_converter.dart';
 
 /// Packages DOCX XML content and images into a valid .docx file (ZIP archive).
@@ -16,7 +17,11 @@ import 'html_to_docx_converter.dart';
 class DocxPackager {
   /// Create a complete .docx file from the edited HTML.
   static Uint8List createDocx(String html, {String? originalFileName}) {
-    final (bodyXml, images) = HtmlToDocxConverter.convertWithImages(html);
+    print('HTML BEFORE SANITIZE: $html');
+    final cleanHtml = HtmlSanitizer.sanitize(html);
+    print('HTML AFTER SANITIZE: $cleanHtml');
+
+    final (bodyXml, images) = HtmlToDocxConverter.convertWithImages(cleanHtml);
     final imageList = images; // List<ExtractedImage>
 
     // Decode base64 images

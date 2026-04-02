@@ -78,7 +78,7 @@ class DocxToHtmlConverter {
   }
 </style>
 </head>
-<body${editable ? ' contenteditable="true"' : ' contenteditable="false"'} dir="auto">''');
+<body contenteditable="${editable ? 'true' : 'false'}" dir="auto">''');
 
       // Group consecutive list items into proper <ul>/<ol> wrappers
     String? pendingListType;
@@ -223,6 +223,19 @@ class DocxToHtmlConverter {
     }
 
     return _formatTextWithStyles(run.text, run);
+  }
+
+  Map<String, String> parseStyle(String? style) {
+    final map = <String, String>{};
+    if (style == null) return map;
+
+    for (final part in style.split(';')) {
+      final kv = part.split(':');
+      if (kv.length == 2) {
+        map[kv[0].trim()] = kv[1].trim();
+      }
+    }
+    return map;
   }
 
   static String _formatTextWithStyles(String text, DocxRun run) {

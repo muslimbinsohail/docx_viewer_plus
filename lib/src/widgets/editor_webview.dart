@@ -50,7 +50,7 @@ class EditorWebviewState extends State<EditorWebview> {
     if (!_isReady) return null;
     try {
       final result = await _controller
-          .runJavaScriptReturningResult('document.documentElement.outerHTML');
+          .runJavaScriptReturningResult('document.body.innerHTML');
       String html = result.toString();
       // Strip outer quotes if present (JSON string encoding)
       if (html.startsWith('"') && html.endsWith('"')) {
@@ -157,6 +157,12 @@ class EditorWebviewState extends State<EditorWebview> {
             FlutterBridge.postMessage(document.documentElement.outerHTML);
           }, 300);
         }, 100);
+      });
+
+      document.addEventListener("paste", function(e) {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+        document.execCommand("insertText", false, text);
       });
 
       // Monitor drop events

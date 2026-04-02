@@ -1,5 +1,6 @@
 import 'package:xml/xml.dart';
-
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as dom;
 /// Converts HTML back into OOXML format for DOCX generation.
 /// This handles basic formatting: paragraphs, headings, lists, tables, bold,
 /// italic, underline, font sizes, colors, alignment, and images (as base64).
@@ -13,15 +14,29 @@ class HtmlToDocxConverter {
 
   /// Convert HTML string to a DOCX XML body string.
   static String convertHtmlToBody(String html) {
-    final doc = XmlDocument.parse(_sanitizeHtml(html));
+    final doc = html_parser.parse(_sanitizeHtml(html));
     final bodyEl = XmlBuilder();
     bodyEl.element('w:body', nest: () {
-      _processNode(doc.rootElement, bodyEl);
+      final root = doc.body ?? doc.documentElement;
+      if (root != null) {
+        _processNode(root, bodyEl);
+      }
     });
     return bodyEl.buildDocument().toXmlString(pretty: true);
   }
-  static String _sanitizeHtml(String html) {
-    // Void elements that are valid HTML but unclosed, which break XML parsing
+static String _sanitizeHtml(String html) {
+    var result = html;
+
+    // Fix common XML-breaking entities
+    result = result.replaceAll('&nbsp;', ' ');
+    result = result.replaceAll('&', '&amp;');
+
+    // Restore already-correct entities
+    result = result.replaceAll('&amp;lt;', '&lt;');
+    result = result.replaceAll('&amp;gt;', '&gt;');
+    result = result.replaceAll('&amp;quot;', '&quot;');
+
+    // Self-close void tags
     const voidTags = [
       'meta',
       'link',
@@ -38,29 +53,31 @@ class HtmlToDocxConverter {
       'track',
       'wbr'
     ];
-    var result = html;
+
     for (final tag in voidTags) {
-      // Match <tag ...> that are NOT already self-closed
       result = result.replaceAllMapped(
-        RegExp(r'<' + tag + r'(\s[^>]*)?>(?!\s*</' + tag + r'>)',
-            caseSensitive: false),
+        RegExp(r'<$tag(\s[^>]*)?>', caseSensitive: false),
         (m) {
-          final inner = m.group(1) ?? '';
-          return '<$tag$inner/>';
+          final full = m.group(0)!;
+          if (full.endsWith('/>')) return full;
+          return full.replaceFirst('>', '/>');
         },
       );
     }
+
     return result;
   }
-
   /// Convert HTML to a minimal OOXML body and also extract images.
   static (String bodyXml, List<ExtractedImage> images) convertWithImages(
       String html) {
-    final doc = XmlDocument.parse(_sanitizeHtml(html));
+    final doc = html_parser.parse(html);
     final images = <ExtractedImage>[];
     final bodyBuilder = XmlBuilder();
     bodyBuilder.element('w:body', nest: () {
-      _processNode(doc.rootElement, bodyBuilder, images: images);
+      final root = doc.body ?? doc.documentElement;
+      if (root != null) {
+        _processNode(root, bodyBuilder, images: images);
+      }
     });
     // Add last section properties
     bodyBuilder.element('w:sectPr', nest: () {
@@ -79,15 +96,15 @@ class HtmlToDocxConverter {
     return (bodyBuilder.buildDocument().toXmlString(pretty: true), images);
   }
 
-  static void _processNode(XmlNode node, XmlBuilder builder,
+  static void _processNode(dom.Node node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    if (node is XmlElement) {
-      final tag = node.localName.toLowerCase();
+    if (node is dom.Element) {
+      final tag = node.localName?.toLowerCase();
       switch (tag) {
         case 'html':
         case 'head':
         case 'body':
-          for (final child in node.children) {
+          for (final child in node.nodes) {
             _processNode(child, builder, images: images);
           }
           break;
@@ -103,7 +120,7 @@ class HtmlToDocxConverter {
         case 'h4':
         case 'h5':
         case 'h6':
-          final level = int.tryParse(tag.substring(1)) ?? 1;
+          final level = int.tryParse(tag!.substring(1)) ?? 1;
           builder.element('w:p', nest: () {
             builder.element('w:pPr', nest: () {
               builder
@@ -131,7 +148,7 @@ class HtmlToDocxConverter {
               _processInlineChildren(node, builder, images: images);
             });
           } else {
-            for (final child in node.children) {
+            for (final child in node.nodes) {
               _processNode(child, builder, images: images);
             }
           }
@@ -168,76 +185,64 @@ class HtmlToDocxConverter {
           _processInlineChildren(node, builder, images: images);
           break;
         default:
-          for (final child in node.children) {
+          for (final child in node.nodes) {
             _processNode(child, builder, images: images);
           }
           break;
       }
-    } else if (node is XmlText) {
-      final text = node.value.trim();
+    } else if (node is dom.Text) {
+      final text = node.text.trim();
       if (text.isNotEmpty) {
         _addTextRun(builder, text);
       }
     }
   }
 
-  static void _processInlineChildren(XmlElement node, XmlBuilder builder,
+static void _processInlineChildren(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    for (final child in node.children) {
-      if (child is XmlElement) {
-        final tag = child.localName.toLowerCase();
+    for (final child in node.nodes) {
+      if (child is dom.Element) {
+        final tag = child.localName?.toLowerCase() ?? '';
+
         switch (tag) {
           case 'b':
           case 'strong':
             _processFormattedRun(child, builder, bold: true, images: images);
             break;
+
           case 'i':
           case 'em':
             _processFormattedRun(child, builder, italic: true, images: images);
             break;
+
           case 'u':
             _processFormattedRun(child, builder,
                 underline: true, images: images);
             break;
-          case 's':
-          case 'strike':
-          case 'del':
-            _processFormattedRun(child, builder,
-                strikethrough: true, images: images);
-            break;
-          case 'span':
-            _processSpan(child, builder, images: images);
-            break;
-          case 'font':
-            _processFont(child, builder, images: images);
-            break;
-          case 'a':
-            _processAnchor(child, builder, images: images);
-            break;
+
           case 'br':
             builder.element('w:r', nest: () {
               builder.element('w:br');
             });
             break;
+
           case 'img':
             _processImage(child, builder, images: images);
             break;
+
           default:
-            for (final sub in child.children) {
-              _processNode(sub, builder, images: images);
-            }
+            _processInlineChildren(child, builder, images: images);
         }
-      } else if (child is XmlText) {
-        final text = child.value;
+      } else if (child is dom.Text) {
+        final text = child.text;
         if (text.trim().isNotEmpty) {
           _addTextRun(builder, text);
         }
       }
     }
   }
-
-  static void _processFormattedRun(
-    XmlElement node,
+ static void _processFormattedRun(
+    dom.Element node,
     XmlBuilder builder, {
     bool bold = false,
     bool italic = false,
@@ -245,9 +250,10 @@ class HtmlToDocxConverter {
     bool strikethrough = false,
     List<ExtractedImage>? images,
   }) {
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
+    for (final child in node.nodes) {
+      if (child is dom.Text) {
+        final text = child.text;
+
         if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             builder.element('w:rPr', nest: () {
@@ -258,24 +264,24 @@ class HtmlToDocxConverter {
               }
               if (strikethrough) builder.element('w:strike');
             });
+
             builder.element('w:t', nest: text);
           });
         }
-      } else if (child is XmlElement) {
+      } else if (child is dom.Element) {
         _processInlineChildren(child, builder, images: images);
       }
     }
   }
-
-  static void _processSpan(XmlElement node, XmlBuilder builder,
+  static void _processSpan(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    final style = node.getAttribute('style') ?? '';
+    final style = node.attributes['style'] ?? '';
     final (bold, italic, underline, strike, fontSize, fontFamily, color) =
         _parseInlineStyle(style);
 
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
+    for (final child in node.nodes) {
+      if (child is dom.Text) {
+        final text = child.text;
         if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             if (bold ||
@@ -314,21 +320,21 @@ class HtmlToDocxConverter {
             builder.element('w:t', nest: text);
           });
         }
-      } else if (child is XmlElement) {
+      } else if (child is dom.Element) {
         _processInlineChildren(child, builder, images: images);
       }
     }
   }
 
-  static void _processFont(XmlElement node, XmlBuilder builder,
+  static void _processFont(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    final fontFace = node.getAttribute('face');
-    final fontSize = node.getAttribute('size');
-    final color = node.getAttribute('color');
+    final fontFace = node.attributes['face'];
+    final fontSize = node.attributes['size'];
+    final color = node.attributes['color'];
 
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
+    for (final child in node.nodes) {
+      if (child is dom.Text) {
+        final text = child.text;
         if (text.isNotEmpty) {
           builder.element('w:r', nest: () {
             builder.element('w:rPr', nest: () {
@@ -355,11 +361,11 @@ class HtmlToDocxConverter {
     }
   }
 
-  static void _processAnchor(XmlElement node, XmlBuilder builder,
+  static void _processAnchor(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
+    for (final child in node.nodes) {
+      if (child is dom.Text) {
+        final text = child.text;
         if (text.isNotEmpty) {
           builder.element('w:hyperlink', attributes: {'r:id': '_html_link'},
               nest: () {
@@ -375,9 +381,9 @@ class HtmlToDocxConverter {
     }
   }
 
-  static void _processImage(XmlElement node, XmlBuilder builder,
+  static void _processImage(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
-    final src = node.getAttribute('src') ?? '';
+    final src = node.attributes['src'] ?? '';
     if (src.startsWith('data:') && images != null) {
       // Parse data URI: data:image/png;base64,xxxxx
       final parts = src.split(',');
@@ -457,10 +463,10 @@ class HtmlToDocxConverter {
     }
   }
 
-  static void _processList(XmlElement node, XmlBuilder builder,
+  static void _processList(dom.Element node, XmlBuilder builder,
       {required bool isOrdered, List<ExtractedImage>? images}) {
-    for (final child in node.children) {
-      if (child is XmlElement && child.localName.toLowerCase() == 'li') {
+    for (final child in node.nodes) {
+      if (child is dom.Element && (child.localName?.toLowerCase() ?? '') == 'li') {
         builder.element('w:p', nest: () {
           builder.element('w:pPr', nest: () {
             builder.element('w:pStyle', attributes: {
@@ -473,7 +479,7 @@ class HtmlToDocxConverter {
     }
   }
 
-  static void _processTable(XmlElement node, XmlBuilder builder,
+  static void _processTable(dom.Element node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     builder.element('w:tbl', nest: () {
       builder.element('w:tblPr', nest: () {
@@ -518,15 +524,15 @@ class HtmlToDocxConverter {
           });
         });
       });
-      for (final child in node.children) {
-        if (child is XmlElement && child.localName.toLowerCase() == 'tr') {
+      for (final child in node.nodes) {
+        if (child is dom.Element && (child.localName?.toLowerCase() ?? '') == 'tr') {
           builder.element('w:tr', nest: () {
-            for (final cell in child.children) {
-              if (cell is XmlElement &&
-                  (cell.localName.toLowerCase() == 'td' ||
-                      cell.localName.toLowerCase() == 'th')) {
-                final colspan = cell.getAttribute('colspan');
-                final rowspan = cell.getAttribute('rowspan');
+            for (final cell in child.nodes) {
+              if (cell is dom.Element &&
+                  ((cell.localName?.toLowerCase() ?? '') == 'td' ||
+                      (cell.localName?.toLowerCase() ?? '') == 'th')) {
+                final colspan = cell.attributes['colspan'];
+                final rowspan = cell.attributes['rowspan'];
                 builder.element('w:tc', nest: () {
                   builder.element('w:tcPr', nest: () {
                     if (colspan != null) {
@@ -556,8 +562,8 @@ class HtmlToDocxConverter {
     });
   }
 
-  static void _parseAlignment(XmlElement node, XmlBuilder builder) {
-    final style = node.getAttribute('style') ?? '';
+  static void _parseAlignment(dom.Element node, XmlBuilder builder) {
+    final style = node.attributes['style'] ?? '';
     if (style.contains('text-align') || style.contains('align')) {
       if (style.contains('center')) {
         builder.element('w:jc', attributes: {'w:val': 'center'});
@@ -570,7 +576,7 @@ class HtmlToDocxConverter {
       }
     }
     // Also check HTML align attribute
-    final align = node.getAttribute('align');
+    final align = node.attributes['align'];
     if (align != null) {
       builder.element('w:jc', attributes: {'w:val': align});
     }
@@ -635,11 +641,11 @@ class HtmlToDocxConverter {
     return (bold, italic, underline, strike, fontSize, fontFamily, color);
   }
 
-  static bool _hasInlineContent(XmlElement node) {
-    for (final child in node.children) {
-      if (child is XmlText && child.value.trim().isNotEmpty) return true;
-      if (child is XmlElement) {
-        final tag = child.localName.toLowerCase();
+  static bool _hasInlineContent(dom.Element node) {
+    for (final child in node.nodes) {
+      if (child is dom.Text && child.text.trim().isNotEmpty) return true;
+      if (child is dom.Element) {
+        final tag = child.localName?.toLowerCase() ?? '';
         if (['span', 'strong', 'b', 'em', 'i', 'u', 'a', 'font', 'br', 'img']
             .contains(tag)) {
           return true;
