@@ -54,17 +54,19 @@ class DocxPackager {
     final archive = Archive();
 
     archive.addFile(ArchiveFile(
-        '[Content_Types].xml', contentTypes.length, contentTypes.codeUnits));
+        '[Content_Types].xml',
+        utf8.encode(contentTypes).length, utf8.encode(contentTypes)));
     archive.addFile(
-        ArchiveFile('_rels/.rels', rootRels.length, rootRels.codeUnits));
+        ArchiveFile(
+        '_rels/.rels', utf8.encode(rootRels).length, utf8.encode(rootRels)));
     archive.addFile(
-        ArchiveFile('word/document.xml', bodyXml.length, bodyXml.codeUnits));
+        ArchiveFile('word/document.xml', utf8.encode(bodyXml).length, utf8.encode(bodyXml)));
     archive.addFile(ArchiveFile(
-        'word/_rels/document.xml.rels', docRels.length, docRels.codeUnits));
+        'word/_rels/document.xml.rels', utf8.encode(docRels).length, utf8.encode(docRels)));
     archive.addFile(
-        ArchiveFile('word/styles.xml', styles.length, styles.codeUnits));
+        ArchiveFile('word/styles.xml', utf8.encode(styles).length, utf8.encode(styles)));
     archive.addFile(ArchiveFile(
-        'word/numbering.xml', numbering.length, numbering.codeUnits));
+        'word/numbering.xml', utf8.encode(numbering).length, utf8.encode(numbering)));
 
     for (final imgFile in imageFiles) {
       archive.addFile(imgFile);
@@ -242,6 +244,25 @@ class DocxPackager {
         <w:insideV w:val="single" w:sz="4" w:space="0" w:color="999999"/>
       </w:tblBorders>
     </w:tblPr>
+  </w:style>
+    <w:style w:type="paragraph" w:styleId="ListBullet">
+    <w:name w:val="List Bullet"/>
+    <w:basedOn w:val="ListParagraph"/>
+    <w:pPr>
+      <w:numPr>
+        <w:numId w:val="1"/>
+      </w:numPr>
+    </w:pPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="ListNumber">
+    <w:name w:val="List Number"/>
+    <w:basedOn w:val="ListParagraph"/>
+    <w:pPr>
+      <w:numPr>
+        <w:numId w:val="2"/>
+      </w:numPr>
+    </w:pPr>
   </w:style>
 </w:styles>''';
   }

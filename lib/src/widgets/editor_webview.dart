@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -14,6 +15,9 @@ class EditorWebview extends StatefulWidget {
   /// Optional callback when WebView is ready.
   final VoidCallback? onReady;
 
+  /// Whether the editor should be read-only.
+  final bool isReadOnly;
+
   /// JavaScript to execute after the page loads.
   final String? initialJs;
 
@@ -23,6 +27,7 @@ class EditorWebview extends StatefulWidget {
     this.onHtmlChanged,
     this.onReady,
     this.initialJs,
+    this.isReadOnly = false, // default it has write access
   });
 
   @override
@@ -50,8 +55,8 @@ class EditorWebviewState extends State<EditorWebview> {
     if (!_isReady) return null;
     try {
       final result = await _controller
-          .runJavaScriptReturningResult('document.documentElement.outerHTML');
-      String html = result.toString();
+          .runJavaScriptReturningResult('JSON.stringify(document.documentElement.outerHTML)');
+      String html = jsonDecode(result.toString()) as String;
       // Strip outer quotes if present (JSON string encoding)
       if (html.startsWith('"') && html.endsWith('"')) {
         html = html.substring(1, html.length - 1);
@@ -131,25 +136,61 @@ class EditorWebviewState extends State<EditorWebview> {
 
   /// Load HTML into the WebView using a data URI.
   Future<void> _loadHtml(String html) async {
-    setState(() => _isReady = false);
+    _isReady = false; // ← don't call setState here
     await _controller.loadHtmlString(html);
   }
 
   /// Set up JavaScript listeners for content changes.
   void _setupEditingListeners() {
-    _controller.runJavaScript('''
-      // Debounce timer for content changes
+    if (widget.isReadOnly) {
+      // READ-ONLY MODE: block all editing but allow selection/copy
+      _controller.runJavaScript('''
+      // Make body non-editable
+      document.body.contentEditable = 'false';
+      document.body.style.userSelect = 'text';
+      document.body.style.webkitUserSelect = 'text';
+      
+      // Block all input events that could modify content
+      document.addEventListener('keydown', function(e) {
+        // Allow: Ctrl+A, Ctrl+C, Ctrl+X (copy/cut for selection)
+        // Block: everything else that types
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === 'a' || e.key === 'c' || e.key === 'x') return;
+        }
+        // Allow arrow keys, Home, End, Page Up/Down for navigation
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key)) return;
+        // Block everything else (typing, Enter, Delete, Backspace, Tab, etc.)
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+      
+      // Block paste
+      document.addEventListener('paste', function(e) {
+        e.preventDefault();
+      }, true);
+      
+      // Block drop
+      document.addEventListener('drop', function(e) {
+        e.preventDefault();
+      }, true);
+      
+      // Block drag
+      document.addEventListener('dragstart', function(e) {
+        if (e.target.tagName !== 'IMG') e.preventDefault();
+      }, true);
+      
+      // Prevent context menu "Paste" / "Cut" (keep "Copy" and "Select All")
+    ''');
+    } else {
+      // EDIT MODE (existing code)
+      _controller.runJavaScript('''
       let _htmlChangeTimer = null;
-
-      // Monitor input events on the contenteditable body
       document.body.addEventListener('input', function() {
         if (_htmlChangeTimer) clearTimeout(_htmlChangeTimer);
         _htmlChangeTimer = setTimeout(function() {
           FlutterBridge.postMessage(document.documentElement.outerHTML);
         }, 500);
       });
-
-      // Monitor paste events
       document.body.addEventListener('paste', function(e) {
         setTimeout(function() {
           if (_htmlChangeTimer) clearTimeout(_htmlChangeTimer);
@@ -158,25 +199,20 @@ class EditorWebviewState extends State<EditorWebview> {
           }, 300);
         }, 100);
       });
-
-      // Monitor drop events
       document.body.addEventListener('drop', function(e) {
         setTimeout(function() {
           FlutterBridge.postMessage(document.documentElement.outerHTML);
         }, 300);
       });
-
-      // Prevent default link navigation
-       document.addEventListener('click', function(e) {
+      document.addEventListener('click', function(e) {
         if (e.target.tagName === 'A') {
           e.preventDefault();
         }
       });
-      // Ensure body is focused for execCommand to work
       document.body.focus();
     ''');
+    }
   }
-
   /// Handle messages from the JavaScript bridge.
   void _handleBridgeMessage(String message) {
     if (message.isNotEmpty) {

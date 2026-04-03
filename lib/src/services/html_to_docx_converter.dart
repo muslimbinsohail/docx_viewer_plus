@@ -20,38 +20,55 @@ class HtmlToDocxConverter {
     });
     return bodyEl.buildDocument().toXmlString(pretty: true);
   }
-  static String _sanitizeHtml(String html) {
-    // Void elements that are valid HTML but unclosed, which break XML parsing
-    const voidTags = [
-      'meta',
-      'link',
-      'br',
-      'hr',
-      'img',
-      'input',
-      'area',
-      'base',
-      'col',
-      'embed',
-      'param',
-      'source',
-      'track',
-      'wbr'
-    ];
-    var result = html;
-    for (final tag in voidTags) {
-      // Match <tag ...> that are NOT already self-closed
-      result = result.replaceAllMapped(
-        RegExp(r'<' + tag + r'(\s[^>]*)?>(?!\s*</' + tag + r'>)',
-            caseSensitive: false),
-        (m) {
-          final inner = m.group(1) ?? '';
-          return '<$tag$inner/>';
-        },
-      );
-    }
-    return result;
+    static String _sanitizeHtml(String html) {
+    // Single-pass: match all void tags, handle quoted attributes containing ">",
+    // skip tags that are already self-closed (<br/> or <br />)
+    return html.replaceAllMapped(
+      RegExp(
+        r'''<(meta|link|br|hr|img|input|area|base|col|embed|param|source|track|wbr)((?:\s(?:[^>"']+|"[^"]*"|'[^']*')*)?)>''',
+        caseSensitive: false,
+      ),
+      (m) {
+        final tag = m[1]!;
+        final attrs = m[2] ?? '';
+        // Already self-closed? Leave it alone.
+        if (attrs.trimRight().endsWith('/')) return m[0]!;
+        return '<$tag$attrs/>';
+      },
+    );
   }
+  // static String _sanitizeHtml(String html) {
+  //   // Void elements that are valid HTML but unclosed, which break XML parsing
+  //   const voidTags = [
+  //     'meta',
+  //     'link',
+  //     'br',
+  //     'hr',
+  //     'img',
+  //     'input',
+  //     'area',
+  //     'base',
+  //     'col',
+  //     'embed',
+  //     'param',
+  //     'source',
+  //     'track',
+  //     'wbr'
+  //   ];
+  //   var result = html;
+  //   for (final tag in voidTags) {
+  //     // Match <tag ...> that are NOT already self-closed
+  //     result = result.replaceAllMapped(
+  //       RegExp(r'<' + tag + r'(\s[^>]*)?>(?!\s*</' + tag + r'>)',
+  //           caseSensitive: false),
+  //       (m) {
+  //         final inner = m.group(1) ?? '';
+  //         return '<$tag$inner/>';
+  //       },
+  //     );
+  //   }
+  //   return result;
+  // }
 
   /// Convert HTML to a minimal OOXML body and also extract images.
   static (String bodyXml, List<ExtractedImage> images) convertWithImages(
@@ -59,14 +76,29 @@ class HtmlToDocxConverter {
     final doc = XmlDocument.parse(_sanitizeHtml(html));
     final images = <ExtractedImage>[];
     final bodyBuilder = XmlBuilder();
-    bodyBuilder.element('w:body', nest: () {
+    bodyBuilder.element('w:body', namespaces: {
+      'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    }, nest: () {
       _processNode(doc.rootElement, bodyBuilder, images: images);
     });
     // Add last section properties
-    bodyBuilder.element('w:sectPr', nest: () {
+    bodyBuilder.element('w:sectPr', namespaces: {
+      'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'r':
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    }, nest: () {
       bodyBuilder
-          .element('w:pgSz', attributes: {'w:w': '12240', 'w:h': '15840'});
-      bodyBuilder.element('w:pgMar', attributes: {
+          .element('w:pgSz', namespaces: {
+        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'r':
+            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      }, attributes: {'w:w': '12240', 'w:h': '15840'});
+      bodyBuilder.element('w:pgMar',  namespaces: {
+        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+        'r':
+            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      }, attributes: {
         'w:top': '1440',
         'w:right': '1440',
         'w:bottom': '1440',
@@ -174,9 +206,11 @@ class HtmlToDocxConverter {
           break;
       }
     } else if (node is XmlText) {
-      final text = node.value.trim();
-      if (text.isNotEmpty) {
-        _addTextRun(builder, text);
+      final text = node.value;
+      // Preserve whitespace for inline context, trim only if standalone
+      if (text.trim().isNotEmpty) {
+        // For the root-level processor, trim leading/trailing of block-level text
+        _addTextRun(builder, text.trim());
       }
     }
   }
@@ -230,7 +264,7 @@ class HtmlToDocxConverter {
       } else if (child is XmlText) {
         final text = child.value;
         if (text.trim().isNotEmpty) {
-          _addTextRun(builder, text);
+          _addTextRun(builder, text); // DO NOT trim here, preserve spaces
         }
       }
     }
@@ -412,7 +446,13 @@ class HtmlToDocxConverter {
                 'name': imageName
               });
               builder.element('wp:cNvGraphicFramePr');
-              builder.element('a:graphic', attributes: {
+              builder.element('a:graphic',
+               namespaces: {
+                 'w':
+                        'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                    'r':
+                        'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+               }, attributes: {
                 'xmlns:a':
                     'http://schemas.openxmlformats.org/drawingml/2006/main'
               }, nest: () {
@@ -420,31 +460,101 @@ class HtmlToDocxConverter {
                   'uri':
                       'http://schemas.openxmlformats.org/drawingml/2006/picture'
                 }, nest: () {
-                  builder.element('pic:pic', attributes: {
+                  builder.element('pic:pic', namespaces: {
+                    'w':
+                        'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                    'r':
+                        'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                  }, attributes: {
                     'xmlns:pic':
                         'http://schemas.openxmlformats.org/drawingml/2006/picture'
                   }, nest: () {
-                    builder.element('pic:nvPicPr', nest: () {
-                      builder.element('pic:cNvPr',
+                    builder.element('pic:nvPicPr', namespaces: {
+                      'w':
+                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                      'r':
+                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                    }, nest: () {
+                      builder.element('pic:cNvPr', namespaces: {
+                        'w':
+                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                        'r':
+                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                      },
                           attributes: {'id': '0', 'name': imageName});
-                      builder.element('pic:cNvPicPr');
+                      builder.element('pic:cNvPicPr',
+                        namespaces: {
+                          'w':
+                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                          'r':
+                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                        },
+                      );
                     });
-                    builder.element('pic:blipFill', nest: () {
-                      builder.element('a:blip', attributes: {'r:embed': rid});
-                      builder.element('a:stretch', nest: () {
-                        builder.element('a:fillRect');
+                    builder.element('pic:blipFill', namespaces: {
+                      'w':
+                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                      'r':
+                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                    }, nest: () {
+                      builder.element('a:blip', namespaces: {
+                        'w':
+                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                        'r':
+                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                      }, attributes: {'r:embed': rid});
+                      builder.element('a:stretch', namespaces: {
+                        'w':
+                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                        'r':
+                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                      }, nest: () {
+                        builder.element('a:fillRect',
+                          namespaces: {
+                            'w':
+                                'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                            'r':
+                                'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                          },
+                        );
                       });
                     });
-                    builder.element('pic:spPr', nest: () {
-                      builder.element('a:xfrm', nest: () {
+                    builder.element('pic:spPr', namespaces: {
+                      'w':
+                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                      'r':
+                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                    }, nest: () {
+                      builder.element('a:xfrm', namespaces: {
+                        'w':
+                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                        'r':
+                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                      }, nest: () {
                         builder
-                            .element('a:off', attributes: {'x': '0', 'y': '0'});
-                        builder.element('a:ext',
-                            attributes: {'cx': '4000000', 'cy': '3000000'});
+                            .element('a:off', namespaces: {
+                          'w':
+                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                          'r':
+                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                        }, attributes: {'x': '0', 'y': '0'});
+                        builder.element('a:ext', namespaces: {
+                          'w':
+                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                          'r':
+                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                        }, attributes: {'cx': '4000000', 'cy': '3000000'});
                       });
-                      builder.element('a:prstGeom',
-                          attributes: {'prst': 'rect'}, nest: () {
-                        builder.element('a:avLst');
+                      builder.element('a:prstGeom', namespaces: {
+                        'w':
+                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                        'r':
+                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                      }, attributes: {'prst': 'rect'}, nest: () {
+                        builder.element('a:avLst' ,namespaces: {
+      'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    },);
                       });
                     });
                   });
