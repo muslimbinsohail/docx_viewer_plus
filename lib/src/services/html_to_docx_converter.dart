@@ -136,7 +136,12 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
         RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
     bodyContent = bodyContent.replaceAll(
         RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
-
+// DEBUG: check if tables exist in body content — REMOVE after fixing
+    final tableCount = RegExp(r'<table').allMatches(bodyContent).length;
+    final trCount = RegExp(r'<tr').allMatches(bodyContent).length;
+    final tdCount = RegExp(r'<td|<th').allMatches(bodyContent).length;
+    print('HTML body: ${bodyContent.length} chars, '
+        'tables=$tableCount, tr=$trCount, td/th=$tdCount');
     // Step 4: Parse as XML
     final doc = XmlDocument.parse('<root>$bodyContent</root>');
     final images = <ExtractedImage>[];
@@ -189,8 +194,8 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
 
     return (xml, images);
   }
-  
-    
+
+
   static void _processNode(XmlNode node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     if (node is XmlElement) {
@@ -496,15 +501,13 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
       }
     }
   }
-
-  static void _processImage(XmlElement node, XmlBuilder builder,
+static void _processImage(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     final src = node.getAttribute('src') ?? '';
     if (src.startsWith('data:') && images != null) {
-      // Parse data URI: data:image/png;base64,xxxxx
       final parts = src.split(',');
       if (parts.length >= 2) {
-        final meta = parts[0]; // data:image/png;base64
+        final meta = parts[0];
         final b64 = parts[1];
         final mimeParts = meta.split(';');
         final mimeType = mimeParts.isNotEmpty
@@ -517,6 +520,8 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
             name: imageName, mimeType: mimeType, base64Data: b64));
         final rid = 'rId_img_${images.length}';
 
+        final (emuWidth, emuHeight) = _parseImageDimensions(node);
+
         builder.element('w:r', nest: () {
           builder.element('w:drawing', nest: () {
             builder.element('wp:inline', attributes: {
@@ -526,123 +531,51 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
               'distR': '0',
             }, nest: () {
               builder.element('wp:extent',
-                  attributes: {'cx': '4000000', 'cy': '3000000'});
+                  attributes: {'cx': '$emuWidth', 'cy': '$emuHeight'});
               builder.element('wp:effectExtent',
                   attributes: {'l': '0', 't': '0', 'r': '0', 'b': '0'});
               builder.element('wp:docPr', attributes: {
                 'id': '${images.length + 1}',
-                'name': imageName
+                'name': imageName,
               });
               builder.element('wp:cNvGraphicFramePr');
-              builder.element('a:graphic',
-               namespaces: {
-                 'w':
-                        'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                    'r':
-                        'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-               }, attributes: {
+              builder.element('a:graphic', attributes: {
                 'xmlns:a':
-                    'http://schemas.openxmlformats.org/drawingml/2006/main'
+                    'http://schemas.openxmlformats.org/drawingml/2006/main',
               }, nest: () {
                 builder.element('a:graphicData', attributes: {
                   'uri':
-                      'http://schemas.openxmlformats.org/drawingml/2006/picture'
+                      'http://schemas.openxmlformats.org/drawingml/2006/picture',
                 }, nest: () {
-                  builder.element('pic:pic', namespaces: {
-                    'w':
-                        'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                    'r':
-                        'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                  }, attributes: {
+                  builder.element('pic:pic', attributes: {
                     'xmlns:pic':
-                        'http://schemas.openxmlformats.org/drawingml/2006/picture'
+                        'http://schemas.openxmlformats.org/drawingml/2006/picture',
                   }, nest: () {
-                    builder.element('pic:nvPicPr', namespaces: {
-                      'w':
-                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                      'r':
-                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                    }, nest: () {
-                      builder.element('pic:cNvPr', namespaces: {
-                        'w':
-                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'r':
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                      },
-                          attributes: {'id': '0', 'name': imageName});
-                      builder.element('pic:cNvPicPr',
-                        namespaces: {
-                          'w':
-                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                          'r':
-                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                        },
-                      );
+                    builder.element('pic:nvPicPr', nest: () {
+                      builder.element('pic:cNvPr', attributes: {
+                        'id': '0',
+                        'name': imageName,
+                      });
+                      builder.element('pic:cNvPicPr');
                     });
-                    builder.element('pic:blipFill', namespaces: {
-                      'w':
-                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                      'r':
-                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                    }, nest: () {
-                      builder.element('a:blip', namespaces: {
-                        'w':
-                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'r':
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                      }, attributes: {'r:embed': rid});
-                      builder.element('a:stretch', namespaces: {
-                        'w':
-                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'r':
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                      }, nest: () {
-                        builder.element('a:fillRect',
-                          namespaces: {
-                            'w':
-                                'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                            'r':
-                                'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                          },
-                        );
+                    builder.element('pic:blipFill', nest: () {
+                      builder.element('a:blip', attributes: {'r:embed': rid});
+                      builder.element('a:stretch', nest: () {
+                        builder.element('a:fillRect');
                       });
                     });
-                    builder.element('pic:spPr', namespaces: {
-                      'w':
-                          'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                      'r':
-                          'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                    }, nest: () {
-                      builder.element('a:xfrm', namespaces: {
-                        'w':
-                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'r':
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                      }, nest: () {
+                    builder.element('pic:spPr', nest: () {
+                      builder.element('a:xfrm', nest: () {
                         builder
-                            .element('a:off', namespaces: {
-                          'w':
-                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                          'r':
-                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                        }, attributes: {'x': '0', 'y': '0'});
-                        builder.element('a:ext', namespaces: {
-                          'w':
-                              'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                          'r':
-                              'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                        }, attributes: {'cx': '4000000', 'cy': '3000000'});
+                            .element('a:off', attributes: {'x': '0', 'y': '0'});
+                        builder.element('a:ext', attributes: {
+                          'cx': '$emuWidth',
+                          'cy': '$emuHeight',
+                        });
                       });
-                      builder.element('a:prstGeom', namespaces: {
-                        'w':
-                            'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'r':
-                            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-                      }, attributes: {'prst': 'rect'}, nest: () {
-                        builder.element('a:avLst' ,namespaces: {
-      'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-    },);
+                      builder.element('a:prstGeom',
+                          attributes: {'prst': 'rect'}, nest: () {
+                        builder.element('a:avLst');
                       });
                     });
                   });
@@ -655,6 +588,48 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
     }
   }
 
+  /// Parse image dimensions from <img> attributes or CSS style.
+  /// Returns (widthEMU, heightEMU). EMU = English Metric Units (914400 per inch).
+  static (int, int) _parseImageDimensions(XmlElement node) {
+    const emuPerPx = 9525;
+    int width = 0;
+    int height = 0;
+
+    // Try HTML width/height attributes
+    final wAttr = node.getAttribute('width');
+    final hAttr = node.getAttribute('height');
+    if (wAttr != null) width = (double.tryParse(wAttr) ?? 0).toInt();
+    if (hAttr != null) height = (double.tryParse(hAttr) ?? 0).toInt();
+
+    // Try CSS style
+    final style = node.getAttribute('style') ?? '';
+    if (style.isNotEmpty) {
+      final wMatch =
+          RegExp(r'(?:^|;)\s*(?:max-)?width\s*:\s*(\d+(?:\.\d+)?)\s*px')
+              .firstMatch(style);
+      if (wMatch != null) {
+        width = double.parse(wMatch.group(1)!).toInt();
+      }
+      final hMatch =
+          RegExp(r'(?:^|;)\s*(?:max-)?height\s*:\s*(\d+(?:\.\d+)?)\s*px')
+              .firstMatch(style);
+      if (hMatch != null) {
+        height = double.parse(hMatch.group(1)!).toInt();
+      }
+    }
+
+    // Convert px → EMU, default to 6"×4.5" if unknown
+    final wEmu = width > 0 ? width * emuPerPx : 5486400;
+    final hEmu = height > 0 ? height * emuPerPx : 4114800;
+
+    // Cap at A4 width minus margins
+    const maxW = 8100000;
+    if (wEmu > maxW) {
+      final scale = maxW / wEmu;
+      return ((wEmu * scale).round(), (hEmu * scale).round());
+    }
+    return (wEmu, hEmu);
+  }
   static void _processList(XmlElement node, XmlBuilder builder,
       {required bool isOrdered, List<ExtractedImage>? images}) {
     for (final child in node.children) {
@@ -678,71 +653,70 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
         builder.element('w:tblStyle', attributes: {'w:val': 'TableGrid'});
         builder.element('w:tblW', attributes: {'w:w': '5000', 'w:type': 'pct'});
         builder.element('w:tblBorders', nest: () {
-          builder.element('w:top', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
-          builder.element('w:left', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
-          builder.element('w:bottom', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
-          builder.element('w:right', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
-          builder.element('w:insideH', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
-          builder.element('w:insideV', attributes: {
-            'w:val': 'single',
-            'w:sz': '4',
-            'w:space': '0',
-            'w:color': '999999'
-          });
+          for (final border in [
+            'top',
+            'left',
+            'bottom',
+            'right',
+            'insideH',
+            'insideV'
+          ]) {
+            builder.element('w:$border', attributes: {
+              'w:val': 'single',
+              'w:sz': '4',
+              'w:space': '0',
+              'w:color': '999999',
+            });
+          }
         });
       });
-      for (final child in node.children) {
-        if (child is XmlElement && child.localName.toLowerCase() == 'tr') {
-          builder.element('w:tr', nest: () {
-            for (final cell in child.children) {
-              if (cell is XmlElement &&
-                  (cell.localName.toLowerCase() == 'td' ||
-                      cell.localName.toLowerCase() == 'th')) {
-                final colspan = cell.getAttribute('colspan');
-                final rowspan = cell.getAttribute('rowspan');
-                builder.element('w:tc', nest: () {
-                  builder.element('w:tcPr', nest: () {
-                    if (colspan != null) {
-                      builder.element('w:gridSpan',
-                          attributes: {'w:val': colspan});
-                    }
-                    if (rowspan != null) {
-                      builder.element('w:vMerge',
-                          attributes: {'w:val': 'restart'});
-                    }
-                  });
-                  for (final cellChild in cell.children) {
-                    _processNode(cellChild, builder, images: images);
-                  }
-                });
+      // Process all children: direct <tr> AND rows inside <thead>/<tbody>/<tfoot>
+      _processTableRows(node, builder, images: images);
+    });
+  }
+
+  /// Recursively find and process <tr> elements, handling <thead>/<tbody>/<tfoot>.
+  static void _processTableRows(XmlElement node, XmlBuilder builder,
+      {List<ExtractedImage>? images}) {
+    for (final child in node.children) {
+      if (child is XmlElement) {
+        final tag = child.localName.toLowerCase();
+        if (tag == 'tr') {
+          _processTableRow(child, builder, images: images);
+        } else if (tag == 'thead' ||
+            tag == 'tbody' ||
+            tag == 'tfoot' ||
+            tag == 'table') {
+          // Recurse into wrapper elements
+          _processTableRows(child, builder, images: images);
+        }
+      }
+    }
+  }
+
+  static void _processTableRow(XmlElement row, XmlBuilder builder,
+      {List<ExtractedImage>? images}) {
+    builder.element('w:tr', nest: () {
+      for (final child in row.children) {
+        if (child is XmlElement) {
+          final tag = child.localName.toLowerCase();
+          if (tag == 'td' || tag == 'th') {
+            final colspan = child.getAttribute('colspan');
+            final rowspan = child.getAttribute('rowspan');
+            builder.element('w:tc', nest: () {
+              builder.element('w:tcPr', nest: () {
+                if (colspan != null) {
+                  builder.element('w:gridSpan', attributes: {'w:val': colspan});
+                }
+                if (rowspan != null) {
+                  builder.element('w:vMerge', attributes: {'w:val': 'restart'});
+                }
+              });
+              for (final cellChild in child.children) {
+                _processNode(cellChild, builder, images: images);
               }
-            }
-          });
+            });
+          }
         }
       }
     });
