@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:xml/xml.dart';
 
 /// Converts HTML back into OOXML format for DOCX generation.
@@ -130,7 +132,45 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
 
     // Step 2: Sanitize
     bodyContent = _sanitizeHtml(bodyContent);
+    // === DEBUG: Find HTML around styled elements ===
+// Search for <span> with complex inline styles (toolbar-generated)
+    final styledPattern = RegExp(
+      r'<(?:span|b|i|u|s|em|strong|font)[^>]{0,300}style="[^"]{10,}"[^>]*>',
+      caseSensitive: false,
+    );
+    final styledMatches = styledPattern.allMatches(bodyContent);
+    int debugCount = 0;
+    for (final m in styledMatches) {
+      if (debugCount >= 3) break;
+      final start = m.start > 200 ? m.start - 200 : 0;
+      final end =
+          m.end + 200 < bodyContent.length ? m.end + 200 : bodyContent.length;
+      print('═══ STYLED ELEMENT $debugCount (pos ${m.start}) ═══');
+      print(bodyContent.substring(start, end));
+      print('═══ END STYLED $debugCount ═══');
+      debugCount++;
+    }
 
+// Also check for <ul>/<ol> inside headings (bullet on heading text)
+    final listInHeading = RegExp(
+      r'<h[1-6][^>]*>[\s\S]{0,50}?<(?:ul|ol)',
+      caseSensitive: false,
+    );
+    final listMatches = listInHeading.allMatches(bodyContent);
+    for (final m in listMatches) {
+      if (debugCount >= 6) break;
+      final end =
+          m.end + 500 < bodyContent.length ? m.end + 500 : bodyContent.length;
+      print('═══ LIST-IN-HEADING (pos ${m.start}) ═══');
+      print(bodyContent.substring(m.start, end));
+      print('═══ END LIST-IN-HEADING ═══');
+      debugCount++;
+    }
+
+// Check for empty paragraphs (content that vanishes)
+    final emptyP = RegExp(r'<p[^>]*>\s*</p>');
+    print(
+        'Empty paragraphs found: ${emptyP.allMatches(bodyContent).length}');
     // Step 3: Strip any residual <style>/<script>
     bodyContent = bodyContent.replaceAll(
         RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
@@ -274,7 +314,14 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
           _processList(node, builder, isOrdered: true, images: images);
           break;
         case 'li':
-          // Handled by _processList
+          // When <li> appears outside <ul>/<ol> (e.g. inside a heading),
+          // treat it as a list paragraph instead of silently skipping
+          builder.element('w:p', nest: () {
+            builder.element('w:pPr', nest: () {
+              builder.element('w:pStyle', attributes: {'w:val': 'ListBullet'});
+            });
+            _processInlineChildren(node, builder, images: images);
+          });
           break;
         case 'table':
           _processTable(node, builder, images: images);
@@ -293,6 +340,12 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
           _processInlineChildren(node, builder, images: images);
           break;
         default:
+          // DEBUG: Log unhandled block-level tags
+          final text = node.text ?? '';
+          print(
+              'UNHANDLED block tag: <$tag> class="${node.getAttribute('class') ?? ''}" '
+              'children=${node.children.length} '
+              'text="${text.substring(0, text.length.clamp(0, 190))}"');
           for (final child in node.children) {
             _processNode(child, builder, images: images);
           }
@@ -308,7 +361,7 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
     }
   }
 
-  static void _processInlineChildren(XmlElement node, XmlBuilder builder,
+static void _processInlineChildren(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     for (final child in node.children) {
       if (child is XmlElement) {
@@ -349,7 +402,29 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
           case 'img':
             _processImage(child, builder, images: images);
             break;
+          // NEW: handle lists when they appear inside inline context
+          case 'ul':
+            _processList(child, builder, isOrdered: false, images: images);
+            break;
+          case 'ol':
+            _processList(child, builder, isOrdered: true, images: images);
+            break;
+          case 'li':
+            builder.element('w:p', nest: () {
+              builder.element('w:pPr', nest: () {
+                builder
+                    .element('w:pStyle', attributes: {'w:val': 'ListBullet'});
+              });
+              _processInlineChildren(child, builder, images: images);
+            });
+            break;
           default:
+            // DEBUG: Log unhandled tags — REMOVE after fixing
+            print(
+                'UNHANDLED inline tag: <$tag> class="${child.getAttribute('class') ?? ''}" '
+                'style="${child.getAttribute('style') ?? ''}" '
+                'children=${child.children.length} '
+                'text="${child.text?.substring(0, (child.text?.length ?? 0).clamp(0, 190)) ?? ''}"');
             for (final sub in child.children) {
               _processNode(sub, builder, images: images);
             }
@@ -357,12 +432,12 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
       } else if (child is XmlText) {
         final text = child.value;
         if (text.trim().isNotEmpty) {
-          _addTextRun(builder, text); // DO NOT trim here, preserve spaces
+          _addTextRun(builder, text);
         }
       }
     }
   }
-
+  
   static void _processFormattedRun(
     XmlElement node,
     XmlBuilder builder, {
@@ -520,7 +595,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
             name: imageName, mimeType: mimeType, base64Data: b64));
         final rid = 'rId_img_${images.length}';
 
-        final (emuWidth, emuHeight) = _parseImageDimensions(node);
+        final (emuWidth, emuHeight) = _parseImageDimensions(node, b64);
 
         builder.element('w:r', nest: () {
           builder.element('w:drawing', nest: () {
@@ -588,48 +663,122 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     }
   }
 
+
+/// Extract actual pixel dimensions from base64-encoded image data.
+  /// Supports PNG, JPEG, GIF, BMP, WebP.
+  static (int, int)? _getImageDimensionsFromBase64(String base64Data) {
+    try {
+      final bytes = base64Decode(base64Data);
+      if (bytes.length < 24) return null;
+
+      // PNG: width/height at bytes 16-23 (big-endian uint32)
+      if (bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47) {
+        return (
+          bytes[16] << 24 | bytes[17] << 16 | bytes[18] << 8 | bytes[19],
+          bytes[20] << 24 | bytes[21] << 16 | bytes[22] << 8 | bytes[23],
+        );
+      }
+
+      // JPEG: find SOF marker
+      if (bytes[0] == 0xFF && bytes[1] == 0xD8) {
+        int pos = 2;
+        while (pos < bytes.length - 9) {
+          if (bytes[pos] != 0xFF) {
+            pos++;
+            continue;
+          }
+          final marker = bytes[pos + 1];
+          if (marker == 0xD9) break;
+          if (marker == 0xC0 || marker == 0xC2) {
+            return (
+              bytes[pos + 7] << 8 | bytes[pos + 8],
+              bytes[pos + 5] << 8 | bytes[pos + 6],
+            );
+          }
+          pos += 2 + (bytes[pos + 2] << 8 | bytes[pos + 3]);
+        }
+      }
+
+      // GIF: width/height at bytes 6-9 (little-endian uint16)
+      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+        return (
+          bytes[6] | (bytes[7] << 8),
+          bytes[8] | (bytes[9] << 8),
+        );
+      }
+
+      // BMP: width/height at bytes 18-25 (little-endian int32)
+      if (bytes[0] == 0x42 && bytes[1] == 0x4D && bytes.length >= 30) {
+        return (
+          bytes[18] | (bytes[19] << 8) | (bytes[20] << 16) | (bytes[21] << 24),
+          bytes[22] | (bytes[23] << 8) | (bytes[24] << 16) | (bytes[25] << 24),
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
   /// Parse image dimensions from <img> attributes or CSS style.
   /// Returns (widthEMU, heightEMU). EMU = English Metric Units (914400 per inch).
-  static (int, int) _parseImageDimensions(XmlElement node) {
+  /// Get image dimensions — prefers actual image data, falls back to HTML/CSS.
+  static (int, int) _parseImageDimensions(XmlElement node, String? base64Data) {
     const emuPerPx = 9525;
-    int width = 0;
-    int height = 0;
+    const maxW = 8100000; // ~8.5 inches (A4 minus margins)
 
-    // Try HTML width/height attributes
-    final wAttr = node.getAttribute('width');
-    final hAttr = node.getAttribute('height');
-    if (wAttr != null) width = (double.tryParse(wAttr) ?? 0).toInt();
-    if (hAttr != null) height = (double.tryParse(hAttr) ?? 0).toInt();
-
-    // Try CSS style
-    final style = node.getAttribute('style') ?? '';
-    if (style.isNotEmpty) {
-      final wMatch =
-          RegExp(r'(?:^|;)\s*(?:max-)?width\s*:\s*(\d+(?:\.\d+)?)\s*px')
-              .firstMatch(style);
-      if (wMatch != null) {
-        width = double.parse(wMatch.group(1)!).toInt();
-      }
-      final hMatch =
-          RegExp(r'(?:^|;)\s*(?:max-)?height\s*:\s*(\d+(?:\.\d+)?)\s*px')
-              .firstMatch(style);
-      if (hMatch != null) {
-        height = double.parse(hMatch.group(1)!).toInt();
+    // Priority 1: Actual dimensions from image binary data
+    if (base64Data != null) {
+      final dims = _getImageDimensionsFromBase64(base64Data);
+      if (dims != null) {
+        var wEmu = dims.$1 * emuPerPx;
+        var hEmu = dims.$2 * emuPerPx;
+        if (wEmu > maxW) {
+          final s = maxW / wEmu;
+          wEmu = (wEmu * s).round();
+          hEmu = (hEmu * s).round();
+        }
+        return (wEmu, hEmu);
       }
     }
 
-    // Convert px → EMU, default to 6"×4.5" if unknown
-    final wEmu = width > 0 ? width * emuPerPx : 5486400;
-    final hEmu = height > 0 ? height * emuPerPx : 4114800;
+    // Priority 2: CSS style dimensions
+    final style = node.getAttribute('style') ?? '';
+    int wPx = 0, hPx = 0;
+    for (final p in [
+      RegExp(r'(?:^|;)\s*(?:max-)?width\s*:\s*(\d+(?:\.\d+)?)\s*px'),
+    ]) {
+      final m = p.firstMatch(style);
+      if (m != null) {
+        wPx = double.parse(m.group(1)!).toInt();
+        break;
+      }
+    }
+    for (final p in [
+      RegExp(r'(?:^|;)\s*(?:max-)?height\s*:\s*(\d+(?:\.\d+)?)\s*px'),
+    ]) {
+      final m = p.firstMatch(style);
+      if (m != null) {
+        hPx = double.parse(m.group(1)!).toInt();
+        break;
+      }
+    }
 
-    // Cap at A4 width minus margins
-    const maxW = 8100000;
+    final wAttr = node.getAttribute('width');
+    final hAttr = node.getAttribute('height');
+    if (wAttr != null && wPx == 0) wPx = (double.tryParse(wAttr) ?? 0).toInt();
+    if (hAttr != null && hPx == 0) hPx = (double.tryParse(hAttr) ?? 0).toInt();
+
+    var wEmu = wPx > 0 ? wPx * emuPerPx : 5486400;
+    var hEmu = hPx > 0 ? hPx * emuPerPx : 4114800;
     if (wEmu > maxW) {
-      final scale = maxW / wEmu;
-      return ((wEmu * scale).round(), (hEmu * scale).round());
+      final s = maxW / wEmu;
+      wEmu = (wEmu * s).round();
+      hEmu = (hEmu * s).round();
     }
     return (wEmu, hEmu);
   }
+  
   static void _processList(XmlElement node, XmlBuilder builder,
       {required bool isOrdered, List<ExtractedImage>? images}) {
     for (final child in node.children) {
@@ -669,11 +818,72 @@ static void _processImage(XmlElement node, XmlBuilder builder,
             });
           }
         });
+        builder.element('w:tblLayout', attributes: {'w:type': 'autofit'});
       });
-      // Process all children: direct <tr> AND rows inside <thead>/<tbody>/<tfoot>
+
+      // Add tblGrid with column definitions
+      builder.element('w:tblGrid', nest: () {
+        final colCount = _countTableColumns(node);
+        // A4 usable width in DXA = 9360
+        final colWidth = (9360 ~/ (colCount > 0 ? colCount : 1));
+        for (int i = 0; i < (colCount > 0 ? colCount : 1); i++) {
+          builder.element('w:gridCol', attributes: {'w:w': '$colWidth'});
+        }
+      });
+
       _processTableRows(node, builder, images: images);
     });
   }
+
+  /// Count columns in a table by examining the first row.
+  static int _countTableColumns(XmlElement node) {
+    for (final child in node.children) {
+      if (child is XmlElement) {
+        final tag = child.localName.toLowerCase();
+        if (tag == 'tr') {
+          return child.children
+              .where((c) =>
+                  c is XmlElement &&
+                  (c.localName.toLowerCase() == 'td' ||
+                      c.localName.toLowerCase() == 'th'))
+              .length;
+        } else if (tag == 'thead' || tag == 'tbody' || tag == 'tfoot') {
+          final count = _countTableColumns(child);
+          if (count > 0) return count;
+        }
+      }
+    }
+    return 0;
+  }
+
+  // static void _processTable(XmlElement node, XmlBuilder builder,
+  //     {List<ExtractedImage>? images}) {
+  //   builder.element('w:tbl', nest: () {
+  //     builder.element('w:tblPr', nest: () {
+  //       builder.element('w:tblStyle', attributes: {'w:val': 'TableGrid'});
+  //       builder.element('w:tblW', attributes: {'w:w': '5000', 'w:type': 'pct'});
+  //       builder.element('w:tblBorders', nest: () {
+  //         for (final border in [
+  //           'top',
+  //           'left',
+  //           'bottom',
+  //           'right',
+  //           'insideH',
+  //           'insideV'
+  //         ]) {
+  //           builder.element('w:$border', attributes: {
+  //             'w:val': 'single',
+  //             'w:sz': '4',
+  //             'w:space': '0',
+  //             'w:color': '999999',
+  //           });
+  //         }
+  //       });
+  //     });
+  //     // Process all children: direct <tr> AND rows inside <thead>/<tbody>/<tfoot>
+  //     _processTableRows(node, builder, images: images);
+  //   });
+  // }
 
   /// Recursively find and process <tr> elements, handling <thead>/<tbody>/<tfoot>.
   static void _processTableRows(XmlElement node, XmlBuilder builder,

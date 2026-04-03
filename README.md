@@ -29,6 +29,13 @@ native document libraries.
 - **Isolate-Based Processing** — Heavy parsing/packaging
   runs off the UI thread for smooth performance
 
+## Supported Formats
+
+- ✅ .docx (Microsoft Word Open XML)
+- ❌ .doc (Legacy binary Word format not supported)
+
+> Note: This package only supports modern DOCX files. Older DOC files must be converted to DOCX before use.
+
 ## Installation
 
 ```yaml
