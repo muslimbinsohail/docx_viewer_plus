@@ -20,10 +20,46 @@ class HtmlToDocxConverter {
     });
     return bodyEl.buildDocument().toXmlString(pretty: true);
   }
-    static String _sanitizeHtml(String html) {
-    // Single-pass: match all void tags, handle quoted attributes containing ">",
-    // skip tags that are already self-closed (<br/> or <br />)
-    return html.replaceAllMapped(
+   
+     static String _sanitizeHtml(String html) {
+    var result = html;
+    // Strip <!DOCTYPE> — not valid XML
+    result = result.replaceFirst(
+        RegExp(r'<!DOCTYPE[^>]*>', caseSensitive: false), '');
+    // Convert HTML named entities to numeric XML-safe entities
+    // (&nbsp; etc. are valid HTML but NOT valid XML — crash XmlDocument.parse)
+    result = result.replaceAllMapped(
+      RegExp(r'&([a-zA-Z]+);'),
+      (m) {
+        final name = m.group(1)!;
+        if (['amp', 'lt', 'gt', 'quot', 'apos'].contains(name)) {
+          return m[0]!;
+        }
+        const entityMap = {
+          'nbsp': '&#160;',
+          'copy': '&#169;',
+          'reg': '&#174;',
+          'trade': '&#8482;',
+          'mdash': '&#8212;',
+          'ndash': '&#8211;',
+          'laquo': '&#171;',
+          'raquo': '&#187;',
+          'hellip': '&#8230;',
+          'bull': '&#8226;',
+          'middot': '&#183;',
+          'rsquo': '&#8217;',
+          'lsquo': '&#8216;',
+          'rdquo': '&#8221;',
+          'ldquo': '&#8220;',
+          'ensp': '&#8194;',
+          'emsp': '&#8195;',
+          'thinsp': '&#8201;',
+        };
+        return entityMap[name] ?? ' ';
+      },
+    );
+    // Self-close void elements
+    return result.replaceAllMapped(
       RegExp(
         r'''<(meta|link|br|hr|img|input|area|base|col|embed|param|source|track|wbr)((?:\s(?:[^>"']+|"[^"]*"|'[^']*')*)?)>''',
         caseSensitive: false,
@@ -31,13 +67,13 @@ class HtmlToDocxConverter {
       (m) {
         final tag = m[1]!;
         final attrs = m[2] ?? '';
-        // Already self-closed? Leave it alone.
         if (attrs.trimRight().endsWith('/')) return m[0]!;
         return '<$tag$attrs/>';
       },
     );
   }
-  // static String _sanitizeHtml(String html) {
+   
+   // static String _sanitizeHtml(String html) {
   //   // Void elements that are valid HTML but unclosed, which break XML parsing
   //   const voidTags = [
   //     'meta',
@@ -71,45 +107,127 @@ class HtmlToDocxConverter {
   // }
 
   /// Convert HTML to a minimal OOXML body and also extract images.
-  static (String bodyXml, List<ExtractedImage> images) convertWithImages(
+    static (String documentXml, List<ExtractedImage> images) convertWithImages(
       String html) {
-    final doc = XmlDocument.parse(_sanitizeHtml(html));
+    String bodyContent = html;
+
+    // Step 1: Extract ONLY body content — skip <head>/<style> which break XML
+    final bodyMatch = RegExp(
+      r'<body[^>]*>([\s\S]*)</body>',
+      caseSensitive: false,
+    ).firstMatch(bodyContent);
+    if (bodyMatch != null) {
+      bodyContent = bodyMatch.group(1)!;
+    }
+
+    // Step 2: Sanitize — strip DOCTYPE, convert entities, self-close voids
+    bodyContent = _sanitizeHtml(bodyContent);
+
+    // Step 3: Wrap in neutral root for XML parsing
+    final doc = XmlDocument.parse('<root>$bodyContent</root>');
     final images = <ExtractedImage>[];
-    final bodyBuilder = XmlBuilder();
-    bodyBuilder.element('w:body', namespaces: {
-      'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-    }, nest: () {
-      _processNode(doc.rootElement, bodyBuilder, images: images);
-    });
-    // Add last section properties
-    bodyBuilder.element('w:sectPr', namespaces: {
+    final docBuilder = XmlBuilder();
+    docBuilder.element('w:document', namespaces: {
       'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       'r':
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
     }, nest: () {
-      bodyBuilder
-          .element('w:pgSz', namespaces: {
-        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-        'r':
-            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-      }, attributes: {'w:w': '12240', 'w:h': '15840'});
-      bodyBuilder.element('w:pgMar',  namespaces: {
-        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-        'r':
-            'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-      }, attributes: {
-        'w:top': '1440',
-        'w:right': '1440',
-        'w:bottom': '1440',
-        'w:left': '1440',
-        'w:header': '720',
-        'w:footer': '720',
-        'w:gutter': '0',
+      docBuilder.element('w:body', nest: () {
+        _processNode(doc.rootElement, docBuilder, images: images);
+        docBuilder.element('w:sectPr', nest: () {
+          docBuilder
+              .element('w:pgSz', attributes: {'w:w': '12240', 'w:h': '15840'});
+          docBuilder.element('w:pgMar', attributes: {
+            'w:top': '1440',
+            'w:right': '1440',
+            'w:bottom': '1440',
+            'w:left': '1440',
+            'w:header': '720',
+            'w:footer': '720',
+            'w:gutter': '0',
+          });
+        });
       });
     });
-    return (bodyBuilder.buildDocument().toXmlString(pretty: true), images);
+    String xml = docBuilder.buildDocument().toXmlString(pretty: true);
+    xml = xml.replaceFirst('<?xml version="1.0" ?>',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+    return (xml, images);
   }
+  
+
+  // static (String documentXml, List<ExtractedImage> images) convertWithImages(
+  //     String html) {
+  //   final doc = XmlDocument.parse(_sanitizeHtml(html));
+  //   final images = <ExtractedImage>[];
+  //   final docBuilder = XmlBuilder();
+  //   docBuilder.element('w:document', namespaces: {
+  //     'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  //     'r':
+  //         'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  //   }, nest: () {
+  //     docBuilder.element('w:body', nest: () {
+  //       _processNode(doc.rootElement, docBuilder, images: images);
+  //       docBuilder.element('w:sectPr', nest: () {
+  //         docBuilder
+  //             .element('w:pgSz', attributes: {'w:w': '12240', 'w:h': '15840'});
+  //         docBuilder.element('w:pgMar', attributes: {
+  //           'w:top': '1440',
+  //           'w:right': '1440',
+  //           'w:bottom': '1440',
+  //           'w:left': '1440',
+  //           'w:header': '720',
+  //           'w:footer': '720',
+  //           'w:gutter': '0',
+  //         });
+  //       });
+  //     });
+  //   });
+  //   String xml = docBuilder.buildDocument().toXmlString(pretty: true);
+  //   xml = xml.replaceFirst('<?xml version="1.0" ?>',
+  //       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+  //   return (xml, images);
+  // }
+
+  // static (String bodyXml, List<ExtractedImage> images) convertWithImages(
+  //     String html) {
+  //   final doc = XmlDocument.parse(_sanitizeHtml(html));
+  //   final images = <ExtractedImage>[];
+  //   final bodyBuilder = XmlBuilder();
+  //   bodyBuilder.element('w:body', namespaces: {
+  //     'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  //     'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  //   }, nest: () {
+  //     _processNode(doc.rootElement, bodyBuilder, images: images);
+  //   });
+  //   // Add last section properties
+  //   bodyBuilder.element('w:sectPr', namespaces: {
+  //     'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  //     'r':
+  //         'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  //   }, nest: () {
+  //     bodyBuilder
+  //         .element('w:pgSz', namespaces: {
+  //       'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  //       'r':
+  //           'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  //     }, attributes: {'w:w': '12240', 'w:h': '15840'});
+  //     bodyBuilder.element('w:pgMar',  namespaces: {
+  //       'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  //       'r':
+  //           'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  //     }, attributes: {
+  //       'w:top': '1440',
+  //       'w:right': '1440',
+  //       'w:bottom': '1440',
+  //       'w:left': '1440',
+  //       'w:header': '720',
+  //       'w:footer': '720',
+  //       'w:gutter': '0',
+  //     });
+  //   });
+  //   return (bodyBuilder.buildDocument().toXmlString(pretty: true), images);
+  // }
 
   static void _processNode(XmlNode node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
@@ -154,6 +272,14 @@ class HtmlToDocxConverter {
           });
           break;
         case 'div':
+          // Skip wrapper divs used for layout — process their children
+          if (node.getAttribute('class') != null &&
+              node.getAttribute('class')!.contains('doc-editor')) {
+            for (final child in node.children) {
+              _processNode(child, builder, images: images);
+            }
+            break;
+          }
           // Treat as paragraph if it contains inline content
           if (_hasInlineContent(node)) {
             builder.element('w:p', nest: () {

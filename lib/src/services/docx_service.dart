@@ -108,7 +108,7 @@ class DocxService extends ChangeNotifier {
   Future<String?> saveDocx({String? outputPath, String? htmlOverride}) async {
     final html = htmlOverride ?? _html;
     if (html.isEmpty) return null;
-    _setLoading(true, 'Saving...');
+    // _setLoading(true, 'Saving...');
     _errorMessage = '';
     try {
       final docxBytes =
@@ -127,12 +127,10 @@ class DocxService extends ChangeNotifier {
       _originalFileBytes = docxBytes;
       _fileName = savePath.split('/').last;
       _isModified = false;
-      _setLoading(false);
       notifyListeners();
       return savePath;
     } catch (e) {
       _errorMessage = 'Failed to save DOCX: $e';
-      _setLoading(false);
       notifyListeners();
       return null;
     }

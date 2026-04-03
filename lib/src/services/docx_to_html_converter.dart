@@ -6,25 +6,36 @@ class DocxToHtmlConverter {
   /// Convert the entire document to HTML.
   static String convert(DocxDocument document, {bool editable = true}) {
     final buffer = StringBuffer();
-
     buffer.writeln('''<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
   * { box-sizing: border-box; }
-    body {
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  body {
     font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans', 'Noto Sans Arabic', 'Noto Sans CJK SC', 'Noto Sans Devanagari', 'Noto Sans Thai', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans', 'Calibri', Arial, sans-serif;
     font-size: 11pt;
     line-height: 1.15;
     color: #1a1a1a;
-    margin: 0;
+    background: #ffffff;
+    unicode-bidi: plaintext;
+  }
+  .doc-editor {
     padding: 24px 32px;
     max-width: 850px;
     margin: 0 auto;
-    background: #ffffff;
+    min-height: 100%;
     unicode-bidi: plaintext;
+    outline: none;
   }
   h1 { font-size: 28pt; font-weight: bold; color: #1a1a1a; margin: 16pt 0 8pt 0; }
   h2 { font-size: 22pt; font-weight: bold; color: #1a1a1a; margin: 14pt 0 8pt 0; }
@@ -78,8 +89,7 @@ class DocxToHtmlConverter {
   }
 </style>
 </head>
-<body${editable ? ' contenteditable="true"' : ' contenteditable="false"'} dir="auto">''');
-
+<body dir="auto"><div class="doc-editor"${editable ? ' contenteditable="true"' : ' contenteditable="false"'}>''');
       // Group consecutive list items into proper <ul>/<ol> wrappers
     String? pendingListType;
     int pendingListLevel = 0;
@@ -135,7 +145,7 @@ class DocxToHtmlConverter {
       buffer.write(listBuffer.toString());
     }
 
-    buffer.writeln('</body></html>');
+    buffer.writeln('</div></body></html>');
     return buffer.toString();
   }
 

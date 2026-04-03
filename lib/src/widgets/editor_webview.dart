@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter/gestures.dart';
 
 /// A WebView widget that renders HTML content and supports contentEditable
 /// for inline editing. Provides JavaScript ↔ Dart communication via channels.
@@ -183,15 +185,16 @@ class EditorWebviewState extends State<EditorWebview> {
     ''');
     } else {
       // EDIT MODE (existing code)
-      _controller.runJavaScript('''
+       _controller.runJavaScript('''
+      let _editor = document.querySelector('.doc-editor');
       let _htmlChangeTimer = null;
-      document.body.addEventListener('input', function() {
+      _editor.addEventListener('input', function() {
         if (_htmlChangeTimer) clearTimeout(_htmlChangeTimer);
         _htmlChangeTimer = setTimeout(function() {
           FlutterBridge.postMessage(document.documentElement.outerHTML);
         }, 500);
       });
-      document.body.addEventListener('paste', function(e) {
+      _editor.addEventListener('paste', function(e) {
         setTimeout(function() {
           if (_htmlChangeTimer) clearTimeout(_htmlChangeTimer);
           _htmlChangeTimer = setTimeout(function() {
@@ -199,7 +202,7 @@ class EditorWebviewState extends State<EditorWebview> {
           }, 300);
         }, 100);
       });
-      document.body.addEventListener('drop', function(e) {
+      _editor.addEventListener('drop', function(e) {
         setTimeout(function() {
           FlutterBridge.postMessage(document.documentElement.outerHTML);
         }, 300);
@@ -209,7 +212,7 @@ class EditorWebviewState extends State<EditorWebview> {
           e.preventDefault();
         }
       });
-      document.body.focus();
+      _editor.focus();
     ''');
     }
   }
@@ -291,6 +294,13 @@ class EditorWebviewState extends State<EditorWebview> {
 
   @override
   Widget build(BuildContext context) {
-    return WebViewWidget(controller: _controller);
+    return WebViewWidget(
+      controller: _controller,
+      gestureRecognizers: {
+        Factory<VerticalDragGestureRecognizer>(
+            () => VerticalDragGestureRecognizer()),
+        Factory<ScaleGestureRecognizer>(() => ScaleGestureRecognizer()),
+      },
+    );
   }
 }

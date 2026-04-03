@@ -13,7 +13,7 @@ import 'editing_toolbar.dart';
 // ///   config: DocxViewerConfig(isReadOnly: true),
 // /// )
 // /// ```
-class DocxViewerWidget extends StatefulWidget {
+class DocxViewerWidget extends StatefulWidget  {
   final String filePath;
   final DocxViewerConfig config;
   final Future<String?> Function()? onSave;
@@ -32,7 +32,9 @@ class DocxViewerWidget extends StatefulWidget {
 }
 
 
-class DocxViewerWidgetState extends State<DocxViewerWidget> {
+class DocxViewerWidgetState extends State<DocxViewerWidget> 
+with AutomaticKeepAliveClientMixin 
+{
   final GlobalKey<EditorWebviewState> _webViewKey = GlobalKey();
   late final DocxService _service;
   bool _showToolbar = true;
@@ -100,6 +102,8 @@ Future<void> _syncHtmlFromWebView() async {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); 
+
     final dir = widget.config.forceTextDirection;
 
     Widget content;
@@ -159,4 +163,7 @@ Future<void> _syncHtmlFromWebView() async {
     }
     return content;
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
