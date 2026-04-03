@@ -93,17 +93,26 @@ class _ExampleHomeScreenState extends State<ExampleHomeScreen> {
   }
 
   // ─── Use Case 10: Share saved file ──────────────────────────────
-  Future<void> _saveAndShare(GlobalKey<DocxViewerWidgetState> key) async {
-    print('currentState: ${key.currentState}');
-    print('hasDocument: ${key.currentState?.service.hasDocument}');
-    print('html empty: ${key.currentState?.service.html.isEmpty}');
+Future<void> _saveAndShare(
 
-    final bytes = await key.currentState?.getDocxBytes();
-    print('bytes: $bytes');
-    if (bytes == null) return;
+    GlobalKey<DocxViewerWidgetState> key) async {
+
+  final state = key.currentState;
+
+  if (state == null || !state.service.hasDocument) return;
+
+  final bytes = await state.getDocxBytes();
+
+  if (bytes == null || bytes.isEmpty) {
+
+    debugPrint('Failed: HTML empty = ${state.service.html.isEmpty}');
+        return;
+    }
 
     final dir = await getTemporaryDirectory();
+
     final path = '${dir.path}/shared_document.docx';
+
     await File(path).writeAsBytes(bytes);
 
     await SharePlus.instance

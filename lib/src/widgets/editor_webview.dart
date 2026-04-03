@@ -39,6 +39,8 @@ class EditorWebview extends StatefulWidget {
 class EditorWebviewState extends State<EditorWebview> {
   late WebViewController _controller;
   bool _isReady = false;
+  /// Whether the WebView is ready for JavaScript execution.
+  bool get isReady => _isReady;
   Timer? _debounceTimer;
 
   /// Execute JavaScript in the WebView.
@@ -55,19 +57,31 @@ class EditorWebviewState extends State<EditorWebview> {
   /// Get the current HTML content from the editor.
   Future<String?> getHtmlContent() async {
     if (!_isReady) return null;
+
     try {
-      final result = await _controller
-          .runJavaScriptReturningResult('JSON.stringify(document.documentElement.outerHTML)');
-      String html = jsonDecode(result.toString()) as String;
-      // Strip outer quotes if present (JSON string encoding)
-      if (html.startsWith('"') && html.endsWith('"')) {
-        html = html.substring(1, html.length - 1);
-      } else if (html.startsWith("'") && html.endsWith("'")) {
-        html = html.substring(1, html.length - 1);
+      final result = await _controller.runJavaScriptReturningResult(
+          'JSON.stringify(document.documentElement.outerHTML)');
+
+      final raw = result.toString();
+
+      String html;
+
+      if (raw.startsWith('“') && raw.endsWith('“')) {
+        html = jsonDecode(raw) as String;
+      } else if (raw.startsWith("'") && raw.endsWith("'")) {
+        html = raw.substring(1, raw.length - 1);
+      } else {
+        try {
+          html = jsonDecode(raw) as String;
+        } catch (_) {
+          html = raw;
+        }
       }
+
       return _unescapeJs(html);
     } catch (e) {
-      debugPrint('Error getting HTML: $e');
+      debugPrint('getHtmlContent error: $e');
+
       return null;
     }
   }
@@ -104,6 +118,17 @@ class EditorWebviewState extends State<EditorWebview> {
     }
   }
 
+    /// Wait for the WebView to become ready. Returns true if ready, false if timeout.
+  Future<bool> waitForReady(
+      {Duration timeout = const Duration(seconds: 2)}) async {
+    if (_isReady) return true;
+    final stopwatch = Stopwatch()..start();
+    while (!_isReady && stopwatch.elapsed < timeout) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    return _isReady;
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -138,7 +163,7 @@ class EditorWebviewState extends State<EditorWebview> {
 
   /// Load HTML into the WebView using a data URI.
   Future<void> _loadHtml(String html) async {
-    _isReady = false; // ← don't call setState here
+    _isReady = false; // No UI update
     await _controller.loadHtmlString(html);
   }
 

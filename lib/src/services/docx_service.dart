@@ -91,10 +91,10 @@ class DocxService extends ChangeNotifier {
     }
   }
 
-  void updateHtml(String newHtml) {
+  void updateHtml(String newHtml, {bool fromSync = false}) {
     if (newHtml != _html) {
       _html = newHtml;
-      _isModified = true;
+      if (!fromSync) _isModified = true; // Only for real user edits
       notifyListeners();
     }
   }
@@ -105,10 +105,26 @@ class DocxService extends ChangeNotifier {
   }
 
   /// Save current content as .docx. Returns saved file path or null.
+  
+    /// Save current content as .docx. Returns saved file path or null.
   Future<String?> saveDocx({String? outputPath, String? htmlOverride}) async {
+    // If no edits were made, save original bytes directly
+    if (!_isModified && _originalFileBytes != null) {
+      String savePath;
+      if (outputPath != null) {
+        savePath = outputPath;
+      } else {
+        final dir = await getTemporaryDirectory();
+        final nameWithoutExt =
+            _fileName.replaceAll(RegExp(r'\.docx$', caseSensitive: false), '');
+        savePath = '${dir.path}/${nameWithoutExt}_edited.docx';
+      }
+      await File(savePath).writeAsBytes(_originalFileBytes!);
+      return savePath;
+    }
+
     final html = htmlOverride ?? _html;
     if (html.isEmpty) return null;
-    // _setLoading(true, 'Saving...');
     _errorMessage = '';
     try {
       final docxBytes =
@@ -136,17 +152,42 @@ class DocxService extends ChangeNotifier {
     }
   }
 
+
   /// Get DOCX bytes directly (for custom sharing/saving).
+  /// Returns original file bytes if no edits were made, otherwise re-converts.
   Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
+    // If no edits were made and we have original bytes, return them directly
+    // This avoids the lossy HTML→DOCX round-trip for unmodified documents
+    if (!_isModified && _originalFileBytes != null) {
+      return Uint8List.fromList(_originalFileBytes!);
+    }
+
     final html = htmlOverride ?? _html;
-    if (html.isEmpty) return null;
+    if (html.isEmpty) {
+      // Fallback: return original bytes if available
+      if (_originalFileBytes != null) {
+        return Uint8List.fromList(_originalFileBytes!);
+      }
+      return null;
+    }
     try {
-      return await packageDocxInIsolate(html, originalFileName: _fileName);
+      final bytes =
+          await packageDocxInIsolate(html, originalFileName: _fileName);
+      // Validate: if conversion produced suspiciously small bytes, fall back
+      if (bytes.length < 200 && _originalFileBytes != null) {
+        debugPrint(
+            'getDocxBytes: conversion produced tiny output (${bytes.length} bytes), falling back to original');
+        return Uint8List.fromList(_originalFileBytes!);
+      }
+      return bytes;
     } catch (e, stack) {
-      print('getDocxBytes error: $e');
-      print('stack: $stack');
+      debugPrint('getDocxBytes error: $e\n$stack');
       _errorMessage = 'Failed to package DOCX: $e';
       notifyListeners();
+      // Fallback: return original bytes if conversion failed
+      if (_originalFileBytes != null) {
+        return Uint8List.fromList(_originalFileBytes!);
+      }
       return null;
     }
   }

@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/viewer_configs.dart';
 import '../services/docx_service.dart';
 import 'editor_webview.dart';
@@ -33,11 +35,9 @@ class DocxViewerWidget extends StatefulWidget  {
 
 
 class DocxViewerWidgetState extends State<DocxViewerWidget> 
-with AutomaticKeepAliveClientMixin 
 {
   final GlobalKey<EditorWebviewState> _webViewKey = GlobalKey();
   late final DocxService _service;
-  bool _showToolbar = true;
   String _initialHtml = ''; // Only set once on first load
 
   DocxService get service => _service;
@@ -81,28 +81,68 @@ with AutomaticKeepAliveClientMixin
     }
   }
 
-Future<void> _syncHtmlFromWebView() async {
-    final h = await _webViewKey.currentState?.getHtmlContent();
-    if (h != null && h.isNotEmpty) _service.updateHtml(h);
+  /// Sync latest HTML from WebView with a readiness wait.
+  /// Waits up to 500ms for the WebView to become ready before syncing.
+  Future<void> _syncHtmlFromWebView() async {
+    final webViewState = _webViewKey.currentState;
+    if (webViewState == null) return;
+
+    // Wait for WebView readiness with a timeout
+    if (!webViewState.isReady) {
+      for (int i = 0; i < 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (webViewState.isReady) break;
+      }
+    }
+
+    final h = await webViewState.getHtmlContent();
+    if (h != null && h.isNotEmpty) {
+      _service.updateHtml(h,fromSync: true);
+    }
   }
+
   /// Programmatic save — returns saved file path or null.
-  Future<String?> save({String? outputPath}) async {
+Future<String?> save({String? outputPath}) async {
     if (!_service.hasDocument) return null;
-    await _syncHtmlFromWebView();
+
+if (_service.isModified) {
+      await _syncHtmlFromWebView();
+    }
+    if (_service.html.isEmpty) {
+      final orig = _service.originalFileBytes;
+
+      if (orig != null) {
+        final dir = await getTemporaryDirectory();
+
+        final name = _service.fileName;
+
+        final path = outputPath ?? '${dir.path}/$name';
+
+        await File(path).writeAsBytes(orig);
+
+        return path;
+      }
+    }
+
     final resolvedPath =
         widget.onSave != null ? await widget.onSave!() : outputPath;
+
     return await _service.saveDocx(outputPath: resolvedPath);
   }
   /// Get raw DOCX bytes.
+    /// Get raw DOCX bytes.
+  /// Returns original bytes for unmodified documents, re-converts for edited ones.
   Future<Uint8List?> getDocxBytes() async {
     if (!_service.hasDocument) return null;
-    await _syncHtmlFromWebView();
-    return _service.getDocxBytes();
+if (_service.isModified) {
+      await _syncHtmlFromWebView();
+    }
+        return _service.getDocxBytes();
   }
+
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); 
 
     final dir = widget.config.forceTextDirection;
 
@@ -137,7 +177,7 @@ Future<void> _syncHtmlFromWebView() async {
         ),
       );
     } else {
-      final toolbar = !widget.config.isReadOnly && _showToolbar
+      final toolbar = !widget.config.isReadOnly 
           ? EditingToolbar(config: widget.config, webViewKey: _webViewKey)
           : const SizedBox.shrink();
 
@@ -163,7 +203,4 @@ Future<void> _syncHtmlFromWebView() async {
     }
     return content;
   }
-
-  @override
-  bool get wantKeepAlive => true;
 }
