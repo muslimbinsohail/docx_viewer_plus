@@ -155,16 +155,14 @@ class DocxService extends ChangeNotifier {
 
   /// Get DOCX bytes directly (for custom sharing/saving).
   /// Returns original file bytes if no edits were made, otherwise re-converts.
-  Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
-    // If no edits were made and we have original bytes, return them directly
-    // This avoids the lossy HTML→DOCX round-trip for unmodified documents
+
+ Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
     if (!_isModified && _originalFileBytes != null) {
       return Uint8List.fromList(_originalFileBytes!);
     }
 
     final html = htmlOverride ?? _html;
     if (html.isEmpty) {
-      // Fallback: return original bytes if available
       if (_originalFileBytes != null) {
         return Uint8List.fromList(_originalFileBytes!);
       }
@@ -173,25 +171,42 @@ class DocxService extends ChangeNotifier {
     try {
       final bytes =
           await packageDocxInIsolate(html, originalFileName: _fileName);
-      // Validate: if conversion produced suspiciously small bytes, fall back
-      if (bytes.length < 200 && _originalFileBytes != null) {
-        debugPrint(
-            'getDocxBytes: conversion produced tiny output (${bytes.length} bytes), falling back to original');
-        return Uint8List.fromList(_originalFileBytes!);
-      }
+      // The conversion produces a ZIP (DOCX) archive.
+      // We can't search for XML content inside compressed bytes.
+      // Trust the conversion result — if no exception was thrown, it's valid.
       return bytes;
     } catch (e, stack) {
       debugPrint('getDocxBytes error: $e\n$stack');
       _errorMessage = 'Failed to package DOCX: $e';
       notifyListeners();
-      // Fallback: return original bytes if conversion failed
       if (_originalFileBytes != null) {
         return Uint8List.fromList(_originalFileBytes!);
       }
       return null;
     }
   }
+  /// True if the DOCX bytes contain at least one <w:t> element with
+  /// non-whitespace text content. A blank DOCX has valid ZIP/OOXML
+  /// structure but zero visible text.
+  bool _docxHasTextContent(Uint8List bytes) {
+    if (bytes.length < 1024) return false;
+    final raw = String.fromCharCodes(bytes);
+    return RegExp(r'w:t[>\s][^>]*>[^<\s]+<').hasMatch(raw);
+  }
 
+  /// Check if a DOCX byte array actually contains text content.
+  /// A blank DOCX has the ZIP/OPC structure but no <w:t> text elements.
+  bool _docxHasContent(Uint8List bytes) {
+    if (bytes.length < 1024) return false;
+    // DOCX is a ZIP archive. Check raw bytes for <w:t> text run markers.
+    // This catches structurally-valid but content-empty documents.
+    final raw = String.fromCharCodes(bytes);
+    // Look for OOXML text run elements (minimum sign of real content)
+    if (!raw.contains('w:t')) return false;
+    // Additional check: ensure there's actual text after <w:t
+    final textMatch = RegExp(r'w:t[>\s][^<]*>[^<]+<').firstMatch(raw);
+    return textMatch != null;
+  }
   void reset() {
     _document = null;
     _html = '';

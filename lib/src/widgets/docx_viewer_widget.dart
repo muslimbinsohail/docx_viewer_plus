@@ -132,12 +132,15 @@ if (_service.isModified) {
   /// Get raw DOCX bytes.
     /// Get raw DOCX bytes.
   /// Returns original bytes for unmodified documents, re-converts for edited ones.
-  Future<Uint8List?> getDocxBytes() async {
+Future<Uint8List?> getDocxBytes() async {
     if (!_service.hasDocument) return null;
-if (_service.isModified) {
+    if (_service.isModified) {
       await _syncHtmlFromWebView();
+      // DEBUG: remove after fixing
+      debugPrint('getDocxBytes html (${_service.html.length} chars): '
+          '${_service.html.substring(0, _service.html.length < 300 ? _service.html.length : 300)}');
     }
-        return _service.getDocxBytes();
+    return _service.getDocxBytes();
   }
 
 

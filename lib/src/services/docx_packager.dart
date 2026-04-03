@@ -18,6 +18,9 @@ class DocxPackager {
   static Uint8List createDocx(String html, {String? originalFileName}) {
     final (bodyXml, images) = HtmlToDocxConverter.convertWithImages(html);
     final imageList = images; // List<ExtractedImage>
+      print(
+        'DOCX XML (${bodyXml.length} chars): ${bodyXml.substring(0, bodyXml.length < 2000 ? bodyXml.length : 2000)}');
+
 
     // Decode base64 images
     final imageFiles = <ArchiveFile>[];

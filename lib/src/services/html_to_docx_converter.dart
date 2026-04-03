@@ -107,30 +107,51 @@ class HtmlToDocxConverter {
   // }
 
   /// Convert HTML to a minimal OOXML body and also extract images.
-    static (String documentXml, List<ExtractedImage> images) convertWithImages(
+
+static (String documentXml, List<ExtractedImage> images) convertWithImages(
       String html) {
     String bodyContent = html;
 
-    // Step 1: Extract ONLY body content — skip <head>/<style> which break XML
+    // Step 1: Extract ONLY body content — skip <head>/<style>
     final bodyMatch = RegExp(
       r'<body[^>]*>([\s\S]*)</body>',
       caseSensitive: false,
     ).firstMatch(bodyContent);
     if (bodyMatch != null) {
       bodyContent = bodyMatch.group(1)!;
+    } else {
+      bodyContent = bodyContent
+          .replaceFirst(RegExp(r'<!DOCTYPE[^>]*>', caseSensitive: false), '')
+          .replaceFirst(
+              RegExp(r'<head[^>]*>[\s\S]*?</head>', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'<html[^>]*>', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'</html>', caseSensitive: false), '');
     }
 
-    // Step 2: Sanitize — strip DOCTYPE, convert entities, self-close voids
+    // Step 2: Sanitize
     bodyContent = _sanitizeHtml(bodyContent);
 
-    // Step 3: Wrap in neutral root for XML parsing
+    // Step 3: Strip any residual <style>/<script>
+    bodyContent = bodyContent.replaceAll(
+        RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
+    bodyContent = bodyContent.replaceAll(
+        RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
+
+    // Step 4: Parse as XML
     final doc = XmlDocument.parse('<root>$bodyContent</root>');
     final images = <ExtractedImage>[];
+
+    // Step 5: Build OOXML with XmlBuilder
     final docBuilder = XmlBuilder();
     docBuilder.element('w:document', namespaces: {
       'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       'r':
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+      'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+      'wp':
+          'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+      'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+      'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
     }, nest: () {
       docBuilder.element('w:body', nest: () {
         _processNode(doc.rootElement, docBuilder, images: images);
@@ -149,12 +170,27 @@ class HtmlToDocxConverter {
         });
       });
     });
+
     String xml = docBuilder.buildDocument().toXmlString(pretty: true);
-    xml = xml.replaceFirst('<?xml version="1.0" ?>',
+
+    // Step 6: FIX broken namespace declarations from XmlBuilder
+    // XmlBuilder produces:   xmlns:http://.../main="w"
+    // Word requires:          xmlns:w="http://.../main"
+    // This single regex fixes ALL namespace declarations in the entire document,
+    // including any inline ones from _processImage
+    xml = xml.replaceAllMapped(
+      RegExp(r'xmlns:(https?://[^">]+)="(\w+)"'),
+      (m) => 'xmlns:${m[2]}="${m[1]}"',
+    );
+
+    // Step 7: Fix XML declaration
+    xml = xml.replaceFirst(RegExp(r'<?xml\s+version="1\.0"\s*\??>'),
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
+
     return (xml, images);
   }
   
+    
   static void _processNode(XmlNode node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     if (node is XmlElement) {
