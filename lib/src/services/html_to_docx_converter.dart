@@ -1128,8 +1128,7 @@ class HtmlToDocxConverter {
             builder.element('w:rStyle', attributes: {'w:val': 'Hyperlink'});
           }
           if (fontSize != null) {
-            final halfPt =
-                (fontSize is int ? fontSize : (fontSize).round());
+            final halfPt = (fontSize is int ? fontSize : (fontSize).round());
             builder.element('w:sz', attributes: {'w:val': '$halfPt'});
             builder.element('w:szCs', attributes: {'w:val': '$halfPt'});
           }
@@ -1227,7 +1226,6 @@ class HtmlToDocxConverter {
     }
     return 0;
   }
-
 
   /// Recursively find and process tr elements, handling thead/tbody/tfoot.
   static void _processTableRows(XmlElement node, XmlBuilder builder,
