@@ -134,7 +134,7 @@ enum ToolbarOption {
 }
 
 /// Customizable strings for UI labels.
-/// 
+///
 class DocxViewerStrings {
   final String save;
   final String cancel;

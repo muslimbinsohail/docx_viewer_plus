@@ -22,8 +22,8 @@ class HtmlToDocxConverter {
     });
     return bodyEl.buildDocument().toXmlString(pretty: true);
   }
-   
-     static String _sanitizeHtml(String html) {
+
+  static String _sanitizeHtml(String html) {
     var result = html;
     // Strip <!DOCTYPE> — not valid XML
     result = result.replaceFirst(
@@ -74,8 +74,8 @@ class HtmlToDocxConverter {
       },
     );
   }
-   
-   // static String _sanitizeHtml(String html) {
+
+  // static String _sanitizeHtml(String html) {
   //   // Void elements that are valid HTML but unclosed, which break XML parsing
   //   const voidTags = [
   //     'meta',
@@ -110,7 +110,7 @@ class HtmlToDocxConverter {
 
   /// Convert HTML to a minimal OOXML body and also extract images.
 
-static (String documentXml, List<ExtractedImage> images) convertWithImages(
+  static (String documentXml, List<ExtractedImage> images) convertWithImages(
       String html) {
     String bodyContent = html;
 
@@ -132,56 +132,6 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
 
     // Step 2: Sanitize
     bodyContent = _sanitizeHtml(bodyContent);
-    // === DEBUG: Find HTML around styled elements ===
-// Search for <span> with complex inline styles (toolbar-generated)
-    final styledPattern = RegExp(
-      r'<(?:span|b|i|u|s|em|strong|font)[^>]{0,300}style="[^"]{10,}"[^>]*>',
-      caseSensitive: false,
-    );
-    final styledMatches = styledPattern.allMatches(bodyContent);
-    int debugCount = 0;
-    for (final m in styledMatches) {
-      if (debugCount >= 3) break;
-      final start = m.start > 200 ? m.start - 200 : 0;
-      final end =
-          m.end + 200 < bodyContent.length ? m.end + 200 : bodyContent.length;
-      print('═══ STYLED ELEMENT $debugCount (pos ${m.start}) ═══');
-      print(bodyContent.substring(start, end));
-      print('═══ END STYLED $debugCount ═══');
-      debugCount++;
-    }
-
-// Also check for <ul>/<ol> inside headings (bullet on heading text)
-    final listInHeading = RegExp(
-      r'<h[1-6][^>]*>[\s\S]{0,50}?<(?:ul|ol)',
-      caseSensitive: false,
-    );
-    final listMatches = listInHeading.allMatches(bodyContent);
-    for (final m in listMatches) {
-      if (debugCount >= 6) break;
-      final end =
-          m.end + 500 < bodyContent.length ? m.end + 500 : bodyContent.length;
-      print('═══ LIST-IN-HEADING (pos ${m.start}) ═══');
-      print(bodyContent.substring(m.start, end));
-      print('═══ END LIST-IN-HEADING ═══');
-      debugCount++;
-    }
-
-// Check for empty paragraphs (content that vanishes)
-    final emptyP = RegExp(r'<p[^>]*>\s*</p>');
-    print(
-        'Empty paragraphs found: ${emptyP.allMatches(bodyContent).length}');
-    // Step 3: Strip any residual <style>/<script>
-    bodyContent = bodyContent.replaceAll(
-        RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
-    bodyContent = bodyContent.replaceAll(
-        RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
-// DEBUG: check if tables exist in body content — REMOVE after fixing
-    final tableCount = RegExp(r'<table').allMatches(bodyContent).length;
-    final trCount = RegExp(r'<tr').allMatches(bodyContent).length;
-    final tdCount = RegExp(r'<td|<th').allMatches(bodyContent).length;
-    print('HTML body: ${bodyContent.length} chars, '
-        'tables=$tableCount, tr=$trCount, td/th=$tdCount');
     // Step 4: Parse as XML
     final doc = XmlDocument.parse('<root>$bodyContent</root>');
     final images = <ExtractedImage>[];
@@ -235,7 +185,6 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
     return (xml, images);
   }
 
-
   static void _processNode(XmlNode node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     if (node is XmlElement) {
@@ -261,13 +210,29 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
         case 'h5':
         case 'h6':
           final level = int.tryParse(tag.substring(1)) ?? 1;
+          // Check if heading wraps a <ul>/<ol> (bullet applied to heading)
+          final listChild = _findListChild(node);
           builder.element('w:p', nest: () {
             builder.element('w:pPr', nest: () {
               builder
                   .element('w:pStyle', attributes: {'w:val': 'Heading$level'});
               _parseAlignment(node, builder);
+              if (listChild != null) {
+                final isOrdered = listChild.localName.toLowerCase() == 'ol';
+                builder.element('w:numPr', nest: () {
+                  builder.element('w:numId', attributes: {
+                    'w:val': isOrdered ? '2' : '1',
+                  });
+                });
+              }
             });
-            _processInlineChildren(node, builder, images: images);
+            if (listChild != null) {
+              // Process list items' content as inline content of heading
+              // FIX: Use recursive search for nested <ul><ul><li> patterns
+              _processAllListItems(listChild, builder, images: images);
+            } else {
+              _processInlineChildren(node, builder, images: images);
+            }
           });
           break;
         case 'p':
@@ -299,6 +264,12 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
             for (final child in node.children) {
               _processNode(child, builder, images: images);
             }
+          }
+          break;
+        case 'blockquote':
+          // Treat as container — process children like a div
+          for (final child in node.children) {
+            _processNode(child, builder, images: images);
           }
           break;
         case 'br':
@@ -341,11 +312,6 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
           break;
         default:
           // DEBUG: Log unhandled block-level tags
-          final text = node.text ?? '';
-          print(
-              'UNHANDLED block tag: <$tag> class="${node.getAttribute('class') ?? ''}" '
-              'children=${node.children.length} '
-              'text="${text.substring(0, text.length.clamp(0, 190))}"');
           for (final child in node.children) {
             _processNode(child, builder, images: images);
           }
@@ -361,222 +327,36 @@ static (String documentXml, List<ExtractedImage> images) convertWithImages(
     }
   }
 
-static void _processInlineChildren(XmlElement node, XmlBuilder builder,
+  /// Find first <ul> or <ol> direct child of an element.
+  static XmlElement? _findListChild(XmlElement node) {
+    for (final child in node.children) {
+      if (child is XmlElement) {
+        final tag = child.localName.toLowerCase();
+        if (tag == 'ul' || tag == 'ol') return child;
+      }
+    }
+    return null;
+  }
+
+  /// Recursively find and process <li> content inside nested <ul>/<ol>.
+  /// Handles cases like <h2><ul><ul><li>text</li></ul></ul></h2>
+  /// where _findListChild returns the outer <ul> but <li> is nested deeper.
+  static void _processAllListItems(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     for (final child in node.children) {
       if (child is XmlElement) {
         final tag = child.localName.toLowerCase();
-        switch (tag) {
-          case 'b':
-          case 'strong':
-            _processFormattedRun(child, builder, bold: true, images: images);
-            break;
-          case 'i':
-          case 'em':
-            _processFormattedRun(child, builder, italic: true, images: images);
-            break;
-          case 'u':
-            _processFormattedRun(child, builder,
-                underline: true, images: images);
-            break;
-          case 's':
-          case 'strike':
-          case 'del':
-            _processFormattedRun(child, builder,
-                strikethrough: true, images: images);
-            break;
-          case 'span':
-            _processSpan(child, builder, images: images);
-            break;
-          case 'font':
-            _processFont(child, builder, images: images);
-            break;
-          case 'a':
-            _processAnchor(child, builder, images: images);
-            break;
-          case 'br':
-            builder.element('w:r', nest: () {
-              builder.element('w:br');
-            });
-            break;
-          case 'img':
-            _processImage(child, builder, images: images);
-            break;
-          // NEW: handle lists when they appear inside inline context
-          case 'ul':
-            _processList(child, builder, isOrdered: false, images: images);
-            break;
-          case 'ol':
-            _processList(child, builder, isOrdered: true, images: images);
-            break;
-          case 'li':
-            builder.element('w:p', nest: () {
-              builder.element('w:pPr', nest: () {
-                builder
-                    .element('w:pStyle', attributes: {'w:val': 'ListBullet'});
-              });
-              _processInlineChildren(child, builder, images: images);
-            });
-            break;
-          default:
-            // DEBUG: Log unhandled tags — REMOVE after fixing
-            print(
-                'UNHANDLED inline tag: <$tag> class="${child.getAttribute('class') ?? ''}" '
-                'style="${child.getAttribute('style') ?? ''}" '
-                'children=${child.children.length} '
-                'text="${child.text?.substring(0, (child.text?.length ?? 0).clamp(0, 190)) ?? ''}"');
-            for (final sub in child.children) {
-              _processNode(sub, builder, images: images);
-            }
-        }
-      } else if (child is XmlText) {
-        final text = child.value;
-        if (text.trim().isNotEmpty) {
-          _addTextRun(builder, text);
-        }
-      }
-    }
-  }
-  
-  static void _processFormattedRun(
-    XmlElement node,
-    XmlBuilder builder, {
-    bool bold = false,
-    bool italic = false,
-    bool underline = false,
-    bool strikethrough = false,
-    List<ExtractedImage>? images,
-  }) {
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
-        if (text.isNotEmpty) {
-          builder.element('w:r', nest: () {
-            builder.element('w:rPr', nest: () {
-              if (bold) builder.element('w:b');
-              if (italic) builder.element('w:i');
-              if (underline) {
-                builder.element('w:u', attributes: {'w:val': 'single'});
-              }
-              if (strikethrough) builder.element('w:strike');
-            });
-            builder.element('w:t', nest: text);
-          });
-        }
-      } else if (child is XmlElement) {
-        _processInlineChildren(child, builder, images: images);
-      }
-    }
-  }
-
-  static void _processSpan(XmlElement node, XmlBuilder builder,
-      {List<ExtractedImage>? images}) {
-    final style = node.getAttribute('style') ?? '';
-    final (bold, italic, underline, strike, fontSize, fontFamily, color) =
-        _parseInlineStyle(style);
-
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
-        if (text.isNotEmpty) {
-          builder.element('w:r', nest: () {
-            if (bold ||
-                italic ||
-                underline ||
-                strike ||
-                fontSize != null ||
-                fontFamily != null ||
-                color != null) {
-              builder.element('w:rPr', nest: () {
-                if (bold) builder.element('w:b');
-                if (italic) builder.element('w:i');
-                if (underline) {
-                  builder.element('w:u', attributes: {'w:val': 'single'});
-                }
-                if (strike) builder.element('w:strike');
-                if (fontSize != null) {
-                  // Convert pt to half-points
-                  final halfPt = (fontSize * 2).round();
-                  builder.element('w:sz', attributes: {'w:val': '$halfPt'});
-                  builder.element('w:szCs', attributes: {'w:val': '$halfPt'});
-                }
-                if (fontFamily != null) {
-                  builder.element('w:rFonts', attributes: {
-                    'w:ascii': fontFamily,
-                    'w:hAnsi': fontFamily,
-                    'w:cs': fontFamily,
-                  });
-                }
-                if (color != null) {
-                  builder.element('w:color',
-                      attributes: {'w:val': color.replaceAll('#', '')});
-                }
-              });
-            }
-            builder.element('w:t', nest: text);
-          });
-        }
-      } else if (child is XmlElement) {
-        _processInlineChildren(child, builder, images: images);
-      }
-    }
-  }
-
-  static void _processFont(XmlElement node, XmlBuilder builder,
-      {List<ExtractedImage>? images}) {
-    final fontFace = node.getAttribute('face');
-    final fontSize = node.getAttribute('size');
-    final color = node.getAttribute('color');
-
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
-        if (text.isNotEmpty) {
-          builder.element('w:r', nest: () {
-            builder.element('w:rPr', nest: () {
-              if (fontFace != null) {
-                builder.element('w:rFonts', attributes: {
-                  'w:ascii': fontFace,
-                  'w:hAnsi': fontFace,
-                });
-              }
-              if (fontSize != null) {
-                final sizePt = double.tryParse(fontSize) ?? 11;
-                final halfPt = (sizePt * 2).round();
-                builder.element('w:sz', attributes: {'w:val': '$halfPt'});
-              }
-              if (color != null) {
-                final hexColor = color.replaceAll('#', '');
-                builder.element('w:color', attributes: {'w:val': hexColor});
-              }
-            });
-            builder.element('w:t', nest: text);
-          });
+        if (tag == 'li') {
+          _processInlineChildren(child, builder, images: images);
+        } else if (tag == 'ul' || tag == 'ol') {
+          // Recurse into nested lists to find <li> elements
+          _processAllListItems(child, builder, images: images);
         }
       }
     }
   }
 
-  static void _processAnchor(XmlElement node, XmlBuilder builder,
-      {List<ExtractedImage>? images}) {
-    for (final child in node.children) {
-      if (child is XmlText) {
-        final text = child.value;
-        if (text.isNotEmpty) {
-          builder.element('w:hyperlink', attributes: {'r:id': '_html_link'},
-              nest: () {
-            builder.element('w:r', nest: () {
-              builder.element('w:rPr', nest: () {
-                builder.element('w:rStyle', attributes: {'w:val': 'Hyperlink'});
-              });
-              builder.element('w:t', nest: text);
-            });
-          });
-        }
-      }
-    }
-  }
-static void _processImage(XmlElement node, XmlBuilder builder,
+  static void _processImage(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     final src = node.getAttribute('src') ?? '';
     if (src.startsWith('data:') && images != null) {
@@ -663,8 +443,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     }
   }
 
-
-/// Extract actual pixel dimensions from base64-encoded image data.
+  /// Extract actual pixel dimensions from base64-encoded image data.
   /// Supports PNG, JPEG, GIF, BMP, WebP.
   static (int, int)? _getImageDimensionsFromBase64(String base64Data) {
     try {
@@ -720,6 +499,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     } catch (_) {}
     return null;
   }
+
   /// Parse image dimensions from <img> attributes or CSS style.
   /// Returns (widthEMU, heightEMU). EMU = English Metric Units (914400 per inch).
   /// Get image dimensions — prefers actual image data, falls back to HTML/CSS.
@@ -778,7 +558,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     }
     return (wEmu, hEmu);
   }
-  
+
   static void _processList(XmlElement node, XmlBuilder builder,
       {required bool isOrdered, List<ExtractedImage>? images}) {
     for (final child in node.children) {
@@ -793,6 +573,634 @@ static void _processImage(XmlElement node, XmlBuilder builder,
         });
       }
     }
+  }
+
+  /// Process inline children with optional inherited formatting context.
+  static void _processInlineChildren(XmlElement node, XmlBuilder builder,
+      {List<ExtractedImage>? images,
+      bool inheritBold = false,
+      bool inheritItalic = false,
+      bool inheritUnderline = false,
+      bool inheritStrike = false,
+      double? inheritFontSize,
+      String? inheritFontFamily,
+      String? inheritColor,
+      String? inheritBgColor}) {
+    for (final child in node.children) {
+      if (child is XmlElement) {
+        final tag = child.localName.toLowerCase();
+        switch (tag) {
+          case 'b':
+          case 'strong':
+            _processFormattedRun(child, builder,
+                bold: true,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'i':
+          case 'em':
+            _processFormattedRun(child, builder,
+                italic: true,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'u':
+            _processFormattedRun(child, builder,
+                underline: true,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 's':
+          case 'strike':
+          case 'del':
+            _processFormattedRun(child, builder,
+                strikethrough: true,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'span':
+            _processSpan(child, builder,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'font':
+            _processFont(child, builder,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'a':
+            _processAnchor(child, builder,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+            break;
+          case 'br':
+            builder.element('w:r', nest: () {
+              builder.element('w:br');
+            });
+            break;
+          case 'img':
+            _processImage(child, builder, images: images);
+            break;
+          case 'ul':
+            _processList(child, builder, isOrdered: false, images: images);
+            break;
+          case 'ol':
+            _processList(child, builder, isOrdered: true, images: images);
+            break;
+          case 'li':
+            builder.element('w:p', nest: () {
+              builder.element('w:pPr', nest: () {
+                builder
+                    .element('w:pStyle', attributes: {'w:val': 'ListBullet'});
+              });
+              _processInlineChildren(child, builder,
+                  images: images,
+                  inheritBold: inheritBold,
+                  inheritItalic: inheritItalic,
+                  inheritUnderline: inheritUnderline,
+                  inheritStrike: inheritStrike,
+                  inheritFontSize: inheritFontSize,
+                  inheritFontFamily: inheritFontFamily,
+                  inheritColor: inheritColor,
+                  inheritBgColor: inheritBgColor);
+            });
+            break;
+          default:
+            _processInlineChildren(child, builder,
+                images: images,
+                inheritBold: inheritBold,
+                inheritItalic: inheritItalic,
+                inheritUnderline: inheritUnderline,
+                inheritStrike: inheritStrike,
+                inheritFontSize: inheritFontSize,
+                inheritFontFamily: inheritFontFamily,
+                inheritColor: inheritColor,
+                inheritBgColor: inheritBgColor);
+        }
+      } else if (child is XmlText) {
+        final text = child.value;
+        if (text.trim().isNotEmpty) {
+          _addTextRun(builder, text,
+              bold: inheritBold,
+              italic: inheritItalic,
+              underline: inheritUnderline,
+              strike: inheritStrike,
+              fontSize: inheritFontSize,
+              fontFamily: inheritFontFamily,
+              color: inheritColor,
+              bgColor: inheritBgColor);
+        }
+      }
+    }
+  }
+
+  /// Process a formatted run (<b>, <i>, <u>, <s>, <strike>, <del>).
+  /// Merges own formatting with inherited formatting from parent.
+  static void _processFormattedRun(
+    XmlElement node,
+    XmlBuilder builder, {
+    bool bold = false,
+    bool italic = false,
+    bool underline = false,
+    bool strikethrough = false,
+    List<ExtractedImage>? images,
+    bool inheritBold = false,
+    bool inheritItalic = false,
+    bool inheritUnderline = false,
+    bool inheritStrike = false,
+    double? inheritFontSize,
+    String? inheritFontFamily,
+    String? inheritColor,
+    String? inheritBgColor,
+  }) {
+    final mergedBold = bold || inheritBold;
+    final mergedItalic = italic || inheritItalic;
+    final mergedUnderline = underline || inheritUnderline;
+    final mergedStrike = strikethrough || inheritStrike;
+
+    for (final child in node.children) {
+      if (child is XmlText) {
+        final text = child.value;
+        if (text.isNotEmpty) {
+          _addTextRun(builder, text,
+              bold: mergedBold,
+              italic: mergedItalic,
+              underline: mergedUnderline,
+              strike: mergedStrike,
+              fontSize: inheritFontSize,
+              fontFamily: inheritFontFamily,
+              color: inheritColor,
+              bgColor: inheritBgColor);
+        }
+      } else if (child is XmlElement) {
+        // FIX: Dispatch child by tag to capture its own formatting!
+        // Previously called _processInlineChildren(child) which only processes
+        // the child's children — losing the child's own tag-based formatting
+        // (e.g. <i>'s italic, <strike>'s strikethrough were lost).
+        _dispatchInlineElement(child, builder,
+            images: images,
+            inheritBold: mergedBold,
+            inheritItalic: mergedItalic,
+            inheritUnderline: mergedUnderline,
+            inheritStrike: mergedStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+      }
+    }
+  }
+
+  /// Process <span> with inline style.
+  static void _processSpan(XmlElement node, XmlBuilder builder,
+      {List<ExtractedImage>? images,
+      bool inheritBold = false,
+      bool inheritItalic = false,
+      bool inheritUnderline = false,
+      bool inheritStrike = false,
+      double? inheritFontSize,
+      String? inheritFontFamily,
+      String? inheritColor,
+      String? inheritBgColor}) {
+    final style = node.getAttribute('style') ?? '';
+    final (
+      sBold,
+      sItalic,
+      sUnderline,
+      sStrike,
+      sFontSize,
+      sFontFamily,
+      sColor,
+      sBgColor
+    ) = _parseInlineStyle(style);
+
+    // Merge: own style overrides inherited
+    final mergedBold = sBold || inheritBold;
+    final mergedItalic = sItalic || inheritItalic;
+    final mergedUnderline = sUnderline || inheritUnderline;
+    final mergedStrike = sStrike || inheritStrike;
+    final mergedFontSize = sFontSize ?? inheritFontSize;
+    final mergedFontFamily = sFontFamily ?? inheritFontFamily;
+    final mergedColor = sColor ?? inheritColor;
+    final mergedBgColor = sBgColor ?? inheritBgColor;
+
+    for (final child in node.children) {
+      if (child is XmlText) {
+        final text = child.value;
+        if (text.isNotEmpty) {
+          _addTextRun(builder, text,
+              bold: mergedBold,
+              italic: mergedItalic,
+              underline: mergedUnderline,
+              strike: mergedStrike,
+              fontSize: mergedFontSize,
+              fontFamily: mergedFontFamily,
+              color: mergedColor,
+              bgColor: mergedBgColor);
+        }
+      } else if (child is XmlElement) {
+        // FIX: Dispatch child by tag to capture its own formatting
+        _dispatchInlineElement(child, builder,
+            images: images,
+            inheritBold: mergedBold,
+            inheritItalic: mergedItalic,
+            inheritUnderline: mergedUnderline,
+            inheritStrike: mergedStrike,
+            inheritFontSize: mergedFontSize,
+            inheritFontFamily: mergedFontFamily,
+            inheritColor: mergedColor,
+            inheritBgColor: mergedBgColor);
+      }
+    }
+  }
+
+  /// Process <font> tag with color, face, size attributes.
+  static void _processFont(XmlElement node, XmlBuilder builder,
+      {List<ExtractedImage>? images,
+      bool inheritBold = false,
+      bool inheritItalic = false,
+      bool inheritUnderline = false,
+      bool inheritStrike = false,
+      double? inheritFontSize,
+      String? inheritFontFamily,
+      String? inheritColor,
+      String? inheritBgColor}) {
+    final fontFace = node.getAttribute('face');
+    final fontSizeAttr = node.getAttribute('size');
+    final fontColor = node.getAttribute('color');
+
+    // Parse style for background-color
+    final style = node.getAttribute('style') ?? '';
+    final bgMatch = RegExp(r'background-color\s*:\s*([^;]+)').firstMatch(style);
+    final bgColor =
+        bgMatch != null ? _parseColorValue(bgMatch.group(1)!) : null;
+
+    // FIX: HTML <font size="N"> uses 1-7 scale, not points.
+    // Convert to half-points for OOXML.
+    final mergedSize = _htmlFontSizeToHalfPt(fontSizeAttr) ?? inheritFontSize;
+    final mergedFamily = (fontFace != null && fontFace.isNotEmpty)
+        ? fontFace
+        : inheritFontFamily;
+    final mergedColor =
+        fontColor != null ? _parseColorValue(fontColor) : inheritColor;
+    final mergedBg = bgColor ?? inheritBgColor;
+
+    for (final child in node.children) {
+      if (child is XmlText) {
+        final text = child.value;
+        if (text.isNotEmpty) {
+          _addTextRun(builder, text,
+              bold: inheritBold,
+              italic: inheritItalic,
+              underline: inheritUnderline,
+              strike: inheritStrike,
+              fontSize: mergedSize,
+              fontFamily: mergedFamily,
+              color: mergedColor,
+              bgColor: mergedBg);
+        }
+      } else if (child is XmlElement) {
+        // FIX: Dispatch child by tag to capture its own formatting
+        _dispatchInlineElement(child, builder,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: mergedSize,
+            inheritFontFamily: mergedFamily,
+            inheritColor: mergedColor,
+            inheritBgColor: mergedBg);
+      }
+    }
+  }
+
+  /// Convert HTML <font size="N"> (1-7 scale) to OOXML half-points.
+  /// Returns null if the attribute is missing or invalid, so the caller
+  /// can fall back to inherited font size.
+  static double? _htmlFontSizeToHalfPt(String? sizeAttr) {
+    if (sizeAttr == null) return null;
+    final n = int.tryParse(sizeAttr);
+    if (n == null) return null;
+    if (n >= 1 && n <= 7) {
+      // Standard HTML font size mapping to points, then to half-points:
+      // 1=10pt=20, 2=13pt=26, 3=16pt=32, 4=18pt=36,
+      // 5=24pt=48, 6=32pt=64, 7=48pt=96
+      const halfPt = <int>[0, 20, 26, 32, 36, 48, 64, 96];
+      return halfPt[n].toDouble();
+    }
+    // For values outside 1-7, treat as raw pt value and convert
+    return (n * 2).toDouble();
+  }
+
+  /// Process <a> (anchor/link) tag.
+  static void _processAnchor(XmlElement node, XmlBuilder builder,
+      {List<ExtractedImage>? images,
+      bool inheritBold = false,
+      bool inheritItalic = false,
+      bool inheritUnderline = false,
+      bool inheritStrike = false,
+      double? inheritFontSize,
+      String? inheritFontFamily,
+      String? inheritColor,
+      String? inheritBgColor}) {
+    final _ = node.getAttribute('href') ?? '';
+    builder.element('w:hyperlink', attributes: {'r:id': '_html_link'},
+        nest: () {
+      for (final child in node.children) {
+        if (child is XmlText) {
+          final text = child.value;
+          if (text.isNotEmpty) {
+            _addTextRun(builder, text,
+                bold: inheritBold,
+                italic: inheritItalic,
+                underline: true, // Links are always underlined
+                strike: inheritStrike,
+                fontSize: inheritFontSize,
+                fontFamily: inheritFontFamily,
+                color: inheritColor,
+                bgColor: inheritBgColor,
+                isHyperlink: true);
+          }
+        } else if (child is XmlElement) {
+          // FIX: Dispatch child by tag to capture its own formatting
+          _dispatchInlineElement(child, builder,
+              images: images,
+              inheritBold: inheritBold,
+              inheritItalic: inheritItalic,
+              inheritUnderline: true, // Links underlined
+              inheritStrike: inheritStrike,
+              inheritFontSize: inheritFontSize,
+              inheritFontFamily: inheritFontFamily,
+              inheritColor: inheritColor,
+              inheritBgColor: inheritBgColor);
+        }
+      }
+    });
+  }
+
+  /// Dispatch an inline element by its tag name, applying the element's own
+  /// formatting before processing its children.
+  ///
+  /// This is the CRITICAL fix for the formatting inheritance bug:
+  /// Previously, _processSpan/_processFont/_processFormattedRun blindly called
+  /// _processInlineChildren(child) for element children, which only processed
+  /// the child's children — losing the child's own tag-based formatting.
+  /// For example: <span><i><u><strike><font>text</font></strike></u></i></span>
+  ///   - _processSpan saw <i> as child, called _processInlineChildren(<i>)
+  ///   - _processInlineChildren(<i>) processed <i>'s children (<u>), but
+  ///     <i>'s own italic was NEVER captured!
+  ///   - Similarly, <strike>'s strikethrough was lost.
+  ///
+  /// Now, each element is dispatched by tag, ensuring its own formatting
+  /// (bold/italic/underline/strike) is applied and merged with inherited.
+  static void _dispatchInlineElement(XmlElement child, XmlBuilder builder,
+      {List<ExtractedImage>? images,
+      bool inheritBold = false,
+      bool inheritItalic = false,
+      bool inheritUnderline = false,
+      bool inheritStrike = false,
+      double? inheritFontSize,
+      String? inheritFontFamily,
+      String? inheritColor,
+      String? inheritBgColor}) {
+    final tag = child.localName.toLowerCase();
+    switch (tag) {
+      case 'b':
+      case 'strong':
+        _processFormattedRun(child, builder,
+            bold: true,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'i':
+      case 'em':
+        _processFormattedRun(child, builder,
+            italic: true,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'u':
+        _processFormattedRun(child, builder,
+            underline: true,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 's':
+      case 'strike':
+      case 'del':
+        _processFormattedRun(child, builder,
+            strikethrough: true,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'span':
+        _processSpan(child, builder,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'font':
+        _processFont(child, builder,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'a':
+        _processAnchor(child, builder,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+        break;
+      case 'br':
+        builder.element('w:r', nest: () {
+          builder.element('w:br');
+        });
+        break;
+      case 'img':
+        _processImage(child, builder, images: images);
+        break;
+      default:
+        _processInlineChildren(child, builder,
+            images: images,
+            inheritBold: inheritBold,
+            inheritItalic: inheritItalic,
+            inheritUnderline: inheritUnderline,
+            inheritStrike: inheritStrike,
+            inheritFontSize: inheritFontSize,
+            inheritFontFamily: inheritFontFamily,
+            inheritColor: inheritColor,
+            inheritBgColor: inheritBgColor);
+    }
+  }
+
+  /// Create a text run with the given formatting properties.
+  /// Only adds <w:rPr> if there's at least one formatting property to apply.
+  /// fontSize is expected in HALF-POINTS (OOXML w:sz unit).
+  static void _addTextRun(XmlBuilder builder, String text,
+      {bool bold = false,
+      bool italic = false,
+      bool underline = false,
+      bool strike = false,
+      double? fontSize,
+      String? fontFamily,
+      String? color,
+      String? bgColor,
+      bool isHyperlink = false}) {
+    final hasProps = bold ||
+        italic ||
+        underline ||
+        strike ||
+        fontSize != null ||
+        (fontFamily != null && fontFamily.isNotEmpty) ||
+        color != null ||
+        bgColor != null ||
+        isHyperlink;
+
+    builder.element('w:r', nest: () {
+      if (hasProps) {
+        builder.element('w:rPr', nest: () {
+          if (bold) builder.element('w:b');
+          if (italic) builder.element('w:i');
+          if (underline) {
+            builder.element('w:u', attributes: {'w:val': 'single'});
+          }
+          if (strike) builder.element('w:strike');
+          if (isHyperlink) {
+            builder.element('w:rStyle', attributes: {'w:val': 'Hyperlink'});
+          }
+          if (fontSize != null) {
+            final halfPt = (fontSize is int ? fontSize : (fontSize).round());
+            builder.element('w:sz', attributes: {'w:val': '$halfPt'});
+            builder.element('w:szCs', attributes: {'w:val': '$halfPt'});
+          }
+          if (fontFamily != null && fontFamily.isNotEmpty) {
+            builder.element('w:rFonts', attributes: {
+              'w:ascii': fontFamily,
+              'w:hAnsi': fontFamily,
+              'w:cs': fontFamily,
+            });
+          }
+          if (color != null) {
+            builder.element('w:color', attributes: {'w:val': color});
+          }
+          if (bgColor != null) {
+            builder.element('w:shd', attributes: {
+              'w:val': 'clear',
+              'w:fill': bgColor,
+            });
+          }
+        });
+      }
+      // FIX: Convert leading/trailing spaces to non-breaking spaces (\u00A0).
+      // Word sometimes strips regular spaces at run boundaries even with
+      // xml:space="preserve". Non-breaking spaces are never stripped.
+      var processedText = text;
+      if (processedText.endsWith(' ')) {
+        processedText =
+            '${processedText.substring(0, processedText.length - 1)}\u00A0';
+      }
+      if (processedText.startsWith(' ')) {
+        processedText = '\u00A0${processedText.substring(1)}';
+      }
+      builder.element('w:t',
+          attributes: {'xml:space': 'preserve'}, nest: processedText);
+    });
   }
 
   static void _processTable(XmlElement node, XmlBuilder builder,
@@ -932,12 +1340,6 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     });
   }
 
-  static void _addTextRun(XmlBuilder builder, String text) {
-    builder.element('w:r', nest: () {
-      builder.element('w:t', attributes: {'xml:space': 'preserve'}, nest: text);
-    });
-  }
-
   static void _parseAlignment(XmlElement node, XmlBuilder builder) {
     final style = node.getAttribute('style') ?? '';
     if (style.contains('text-align') || style.contains('align')) {
@@ -959,6 +1361,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
   }
 
   /// Parse inline CSS style string into formatting properties.
+  /// Returns fontSize in HALF-POINTS (for OOXML w:sz).
   static (
     bool bold,
     bool italic,
@@ -966,11 +1369,12 @@ static void _processImage(XmlElement node, XmlBuilder builder,
     bool strike,
     double? fontSize,
     String? fontFamily,
-    String? color
+    String? color,
+    String? backgroundColor
   ) _parseInlineStyle(String style) {
     bool bold = false, italic = false, underline = false, strike = false;
     double? fontSize;
-    String? fontFamily, color;
+    String? fontFamily, color, backgroundColor;
 
     final parts = style.split(';');
     for (final part in parts) {
@@ -979,7 +1383,7 @@ static void _processImage(XmlElement node, XmlBuilder builder,
       final colon = trimmed.indexOf(':');
       if (colon == -1) continue;
       final prop = trimmed.substring(0, colon).trim().toLowerCase();
-      final value = trimmed.substring(colon + 1).trim().toLowerCase();
+      final value = trimmed.substring(colon + 1).trim();
 
       switch (prop) {
         case 'font-weight':
@@ -999,22 +1403,54 @@ static void _processImage(XmlElement node, XmlBuilder builder,
           break;
         case 'font-size':
           final num = double.tryParse(value.replaceAll(RegExp(r'[^0-9.]'), ''));
-          if (num != null) fontSize = num;
+          // FIX: Convert pt → half-pts. OOXML w:sz uses half-points.
+          // e.g. 14pt → 28 half-pts → <w:sz w:val="28"/>
+          if (num != null) fontSize = num * 2;
           break;
         case 'font-family':
-          fontFamily = value
-              .replaceAll("'", '')
-              .replaceAll('"', '')
-              .split(',')
-              .first
-              .trim();
+          final raw = value.replaceAll("'", '').replaceAll('"', '');
+          final name = raw.split(',').first.trim();
+          if (name.isNotEmpty) fontFamily = name;
           break;
         case 'color':
-          color = value.replaceAll('#', '');
+          color = _parseColorValue(value);
+          break;
+        case 'background-color':
+          backgroundColor = _parseColorValue(value);
           break;
       }
     }
-    return (bold, italic, underline, strike, fontSize, fontFamily, color);
+    return (
+      bold,
+      italic,
+      underline,
+      strike,
+      fontSize,
+      fontFamily,
+      color,
+      backgroundColor
+    );
+  }
+
+  /// Parse CSS color value to 6-digit hex string (without #).
+  /// Handles: #RRGGBB, #RGB, rgb(r, g, b), named colors.
+  static String? _parseColorValue(String value) {
+    // rgb(r, g, b)
+    final rgb = RegExp(r'rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
+        .firstMatch(value);
+    if (rgb != null) {
+      final r = int.parse(rgb.group(1)!).toRadixString(16).padLeft(2, '0');
+      final g = int.parse(rgb.group(2)!).toRadixString(16).padLeft(2, '0');
+      final b = int.parse(rgb.group(3)!).toRadixString(16).padLeft(2, '0');
+      return '$r$g$b';
+    }
+    // #RRGGBB or RRGGBB
+    final hex = value.replaceAll('#', '').replaceAll(' ', '');
+    if (hex.length == 6) return hex;
+    if (hex.length == 3) {
+      return '${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}';
+    }
+    return null;
   }
 
   static bool _hasInlineContent(XmlElement node) {

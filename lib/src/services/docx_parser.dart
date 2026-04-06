@@ -300,7 +300,7 @@ class DocxParser {
     return m;
   }
 
-    /// Resolve style inheritance chain (basedOn).
+  /// Resolve style inheritance chain (basedOn).
   static DocxStyle? resolveStyle(
       Map<String, DocxStyle> styles, String? styleId) {
     if (styleId == null || styleId.isEmpty) return null;
@@ -364,7 +364,7 @@ class DocxParser {
       final doc = XmlDocument.parse(xml);
       final body = _first(doc.rootElement, 'body');
       if (body == null) return els;
-            final ctrs = <String, int>{};
+      final ctrs = <String, int>{};
       for (final c in body.children.whereType<XmlElement>()) {
         try {
           if (c.localName == 'p') {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -28,7 +27,6 @@ class DocxViewerApp extends StatelessWidget {
     );
   }
 }
-
 
 /// Example home screen demonstrating ALL possible use cases of DocxViewerWidget.
 ///
@@ -93,20 +91,16 @@ class _ExampleHomeScreenState extends State<ExampleHomeScreen> {
   }
 
   // ─── Use Case 10: Share saved file ──────────────────────────────
-Future<void> _saveAndShare(
+  Future<void> _saveAndShare(GlobalKey<DocxViewerWidgetState> key) async {
+    final state = key.currentState;
 
-    GlobalKey<DocxViewerWidgetState> key) async {
+    if (state == null || !state.service.hasDocument) return;
 
-  final state = key.currentState;
+    final bytes = await state.getDocxBytes();
 
-  if (state == null || !state.service.hasDocument) return;
-
-  final bytes = await state.getDocxBytes();
-
-  if (bytes == null || bytes.isEmpty) {
-
-    debugPrint('Failed: HTML empty = ${state.service.html.isEmpty}');
-        return;
+    if (bytes == null || bytes.isEmpty) {
+      debugPrint('Failed: HTML empty = ${state.service.html.isEmpty}');
+      return;
     }
 
     final dir = await getTemporaryDirectory();

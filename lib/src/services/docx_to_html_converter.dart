@@ -90,7 +90,7 @@ class DocxToHtmlConverter {
 </style>
 </head>
 <body dir="auto"><div class="doc-editor"${editable ? ' contenteditable="true"' : ' contenteditable="false"'}>''');
-      // Group consecutive list items into proper <ul>/<ol> wrappers
+    // Group consecutive list items into proper <ul>/<ol> wrappers
     String? pendingListType;
     int pendingListLevel = 0;
     final listBuffer = StringBuffer();

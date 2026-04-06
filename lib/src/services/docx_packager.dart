@@ -18,9 +18,6 @@ class DocxPackager {
   static Uint8List createDocx(String html, {String? originalFileName}) {
     final (bodyXml, images) = HtmlToDocxConverter.convertWithImages(html);
     final imageList = images; // List<ExtractedImage>
-      print(
-        'DOCX XML (${bodyXml.length} chars): ${bodyXml.substring(0, bodyXml.length < 2000 ? bodyXml.length : 2000)}');
-
 
     // Decode base64 images
     final imageFiles = <ArchiveFile>[];
@@ -56,20 +53,18 @@ class DocxPackager {
     // Create the archive
     final archive = Archive();
 
-    archive.addFile(ArchiveFile(
-        '[Content_Types].xml',
+    archive.addFile(ArchiveFile('[Content_Types].xml',
         utf8.encode(contentTypes).length, utf8.encode(contentTypes)));
-    archive.addFile(
-        ArchiveFile(
+    archive.addFile(ArchiveFile(
         '_rels/.rels', utf8.encode(rootRels).length, utf8.encode(rootRels)));
-    archive.addFile(
-        ArchiveFile('word/document.xml', utf8.encode(bodyXml).length, utf8.encode(bodyXml)));
+    archive.addFile(ArchiveFile('word/document.xml',
+        utf8.encode(bodyXml).length, utf8.encode(bodyXml)));
+    archive.addFile(ArchiveFile('word/_rels/document.xml.rels',
+        utf8.encode(docRels).length, utf8.encode(docRels)));
     archive.addFile(ArchiveFile(
-        'word/_rels/document.xml.rels', utf8.encode(docRels).length, utf8.encode(docRels)));
-    archive.addFile(
-        ArchiveFile('word/styles.xml', utf8.encode(styles).length, utf8.encode(styles)));
-    archive.addFile(ArchiveFile(
-        'word/numbering.xml', utf8.encode(numbering).length, utf8.encode(numbering)));
+        'word/styles.xml', utf8.encode(styles).length, utf8.encode(styles)));
+    archive.addFile(ArchiveFile('word/numbering.xml',
+        utf8.encode(numbering).length, utf8.encode(numbering)));
 
     for (final imgFile in imageFiles) {
       archive.addFile(imgFile);

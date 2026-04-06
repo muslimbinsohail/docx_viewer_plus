@@ -7,7 +7,6 @@ native document libraries.
 
 ## Features
 
-
 - **DOCX Viewing** — Parse and display .docx files with
   styles, tables, images, lists, and headings preserved
 

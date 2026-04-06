@@ -15,7 +15,7 @@ import 'editing_toolbar.dart';
 // ///   config: DocxViewerConfig(isReadOnly: true),
 // /// )
 // /// ```
-class DocxViewerWidget extends StatefulWidget  {
+class DocxViewerWidget extends StatefulWidget {
   final String filePath;
   final DocxViewerConfig config;
   final Future<String?> Function()? onSave;
@@ -33,9 +33,7 @@ class DocxViewerWidget extends StatefulWidget  {
   State<DocxViewerWidget> createState() => DocxViewerWidgetState();
 }
 
-
-class DocxViewerWidgetState extends State<DocxViewerWidget> 
-{
+class DocxViewerWidgetState extends State<DocxViewerWidget> {
   final GlobalKey<EditorWebviewState> _webViewKey = GlobalKey();
   late final DocxService _service;
   String _initialHtml = ''; // Only set once on first load
@@ -97,15 +95,15 @@ class DocxViewerWidgetState extends State<DocxViewerWidget>
 
     final h = await webViewState.getHtmlContent();
     if (h != null && h.isNotEmpty) {
-      _service.updateHtml(h,fromSync: true);
+      _service.updateHtml(h, fromSync: true);
     }
   }
 
   /// Programmatic save — returns saved file path or null.
-Future<String?> save({String? outputPath}) async {
+  Future<String?> save({String? outputPath}) async {
     if (!_service.hasDocument) return null;
 
-if (_service.isModified) {
+    if (_service.isModified) {
       await _syncHtmlFromWebView();
     }
     if (_service.html.isEmpty) {
@@ -129,10 +127,11 @@ if (_service.isModified) {
 
     return await _service.saveDocx(outputPath: resolvedPath);
   }
+
   /// Get raw DOCX bytes.
-    /// Get raw DOCX bytes.
+  /// Get raw DOCX bytes.
   /// Returns original bytes for unmodified documents, re-converts for edited ones.
-Future<Uint8List?> getDocxBytes() async {
+  Future<Uint8List?> getDocxBytes() async {
     if (!_service.hasDocument) return null;
     if (_service.isModified) {
       await _syncHtmlFromWebView();
@@ -143,10 +142,8 @@ Future<Uint8List?> getDocxBytes() async {
     return _service.getDocxBytes();
   }
 
-
   @override
   Widget build(BuildContext context) {
-
     final dir = widget.config.forceTextDirection;
 
     Widget content;
@@ -180,7 +177,7 @@ Future<Uint8List?> getDocxBytes() async {
         ),
       );
     } else {
-      final toolbar = !widget.config.isReadOnly 
+      final toolbar = !widget.config.isReadOnly
           ? EditingToolbar(config: widget.config, webViewKey: _webViewKey)
           : const SizedBox.shrink();
 

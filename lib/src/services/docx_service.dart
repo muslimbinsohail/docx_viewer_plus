@@ -105,8 +105,8 @@ class DocxService extends ChangeNotifier {
   }
 
   /// Save current content as .docx. Returns saved file path or null.
-  
-    /// Save current content as .docx. Returns saved file path or null.
+
+  /// Save current content as .docx. Returns saved file path or null.
   Future<String?> saveDocx({String? outputPath, String? htmlOverride}) async {
     // If no edits were made, save original bytes directly
     if (!_isModified && _originalFileBytes != null) {
@@ -152,11 +152,10 @@ class DocxService extends ChangeNotifier {
     }
   }
 
-
   /// Get DOCX bytes directly (for custom sharing/saving).
   /// Returns original file bytes if no edits were made, otherwise re-converts.
 
- Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
+  Future<Uint8List?> getDocxBytes({String? htmlOverride}) async {
     if (!_isModified && _originalFileBytes != null) {
       return Uint8List.fromList(_originalFileBytes!);
     }
@@ -185,28 +184,7 @@ class DocxService extends ChangeNotifier {
       return null;
     }
   }
-  /// True if the DOCX bytes contain at least one <w:t> element with
-  /// non-whitespace text content. A blank DOCX has valid ZIP/OOXML
-  /// structure but zero visible text.
-  bool _docxHasTextContent(Uint8List bytes) {
-    if (bytes.length < 1024) return false;
-    final raw = String.fromCharCodes(bytes);
-    return RegExp(r'w:t[>\s][^>]*>[^<\s]+<').hasMatch(raw);
-  }
 
-  /// Check if a DOCX byte array actually contains text content.
-  /// A blank DOCX has the ZIP/OPC structure but no <w:t> text elements.
-  bool _docxHasContent(Uint8List bytes) {
-    if (bytes.length < 1024) return false;
-    // DOCX is a ZIP archive. Check raw bytes for <w:t> text run markers.
-    // This catches structurally-valid but content-empty documents.
-    final raw = String.fromCharCodes(bytes);
-    // Look for OOXML text run elements (minimum sign of real content)
-    if (!raw.contains('w:t')) return false;
-    // Additional check: ensure there's actual text after <w:t
-    final textMatch = RegExp(r'w:t[>\s][^<]*>[^<]+<').firstMatch(raw);
-    return textMatch != null;
-  }
   void reset() {
     _document = null;
     _html = '';

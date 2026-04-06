@@ -39,6 +39,7 @@ class EditorWebview extends StatefulWidget {
 class EditorWebviewState extends State<EditorWebview> {
   late WebViewController _controller;
   bool _isReady = false;
+
   /// Whether the WebView is ready for JavaScript execution.
   bool get isReady => _isReady;
   Timer? _debounceTimer;
@@ -118,7 +119,7 @@ class EditorWebviewState extends State<EditorWebview> {
     }
   }
 
-    /// Wait for the WebView to become ready. Returns true if ready, false if timeout.
+  /// Wait for the WebView to become ready. Returns true if ready, false if timeout.
   Future<bool> waitForReady(
       {Duration timeout = const Duration(seconds: 2)}) async {
     if (_isReady) return true;
@@ -210,7 +211,7 @@ class EditorWebviewState extends State<EditorWebview> {
     ''');
     } else {
       // EDIT MODE (existing code)
-       _controller.runJavaScript('''
+      _controller.runJavaScript('''
       let _editor = document.querySelector('.doc-editor');
       let _htmlChangeTimer = null;
       _editor.addEventListener('input', function() {
@@ -241,6 +242,7 @@ class EditorWebviewState extends State<EditorWebview> {
     ''');
     }
   }
+
   /// Handle messages from the JavaScript bridge.
   void _handleBridgeMessage(String message) {
     if (message.isNotEmpty) {
