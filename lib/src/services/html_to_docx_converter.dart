@@ -75,39 +75,6 @@ class HtmlToDocxConverter {
     );
   }
 
-  // static String _sanitizeHtml(String html) {
-  //   // Void elements that are valid HTML but unclosed, which break XML parsing
-  //   const voidTags = [
-  //     'meta',
-  //     'link',
-  //     'br',
-  //     'hr',
-  //     'img',
-  //     'input',
-  //     'area',
-  //     'base',
-  //     'col',
-  //     'embed',
-  //     'param',
-  //     'source',
-  //     'track',
-  //     'wbr'
-  //   ];
-  //   var result = html;
-  //   for (final tag in voidTags) {
-  //     // Match <tag ...> that are NOT already self-closed
-  //     result = result.replaceAllMapped(
-  //       RegExp(r'<' + tag + r'(\s[^>]*)?>(?!\s*</' + tag + r'>)',
-  //           caseSensitive: false),
-  //       (m) {
-  //         final inner = m.group(1) ?? '';
-  //         return '<$tag$inner/>';
-  //       },
-  //     );
-  //   }
-  //   return result;
-  // }
-
   /// Convert HTML to a minimal OOXML body and also extract images.
 
   static (String documentXml, List<ExtractedImage> images) convertWithImages(
@@ -132,6 +99,12 @@ class HtmlToDocxConverter {
 
     // Step 2: Sanitize
     bodyContent = _sanitizeHtml(bodyContent);
+
+    // Step 3: Strip any residual  style and script tags
+    bodyContent = bodyContent.replaceAll(
+        RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
+    bodyContent = bodyContent.replaceAll(
+        RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
     // Step 4: Parse as XML
     final doc = XmlDocument.parse('<root>$bodyContent</root>');
     final images = <ExtractedImage>[];
@@ -169,8 +142,6 @@ class HtmlToDocxConverter {
     String xml = docBuilder.buildDocument().toXmlString(pretty: true);
 
     // Step 6: FIX broken namespace declarations from XmlBuilder
-    // XmlBuilder produces:   xmlns:http://.../main="w"
-    // Word requires:          xmlns:w="http://.../main"
     // This single regex fixes ALL namespace declarations in the entire document,
     // including any inline ones from _processImage
     xml = xml.replaceAllMapped(
@@ -210,7 +181,7 @@ class HtmlToDocxConverter {
         case 'h5':
         case 'h6':
           final level = int.tryParse(tag.substring(1)) ?? 1;
-          // Check if heading wraps a <ul>/<ol> (bullet applied to heading)
+          // Check if heading wraps a list uo and ul tags (bullet applied to heading)
           final listChild = _findListChild(node);
           builder.element('w:p', nest: () {
             builder.element('w:pPr', nest: () {
@@ -228,7 +199,7 @@ class HtmlToDocxConverter {
             });
             if (listChild != null) {
               // Process list items' content as inline content of heading
-              // FIX: Use recursive search for nested <ul><ul><li> patterns
+              // FIX: Use recursive search for nested ul ul li tags patterns
               _processAllListItems(listChild, builder, images: images);
             } else {
               _processInlineChildren(node, builder, images: images);
@@ -285,7 +256,7 @@ class HtmlToDocxConverter {
           _processList(node, builder, isOrdered: true, images: images);
           break;
         case 'li':
-          // When <li> appears outside <ul>/<ol> (e.g. inside a heading),
+          // When li tag appears outside ul and ol tags (e.g. inside a heading),
           // treat it as a list paragraph instead of silently skipping
           builder.element('w:p', nest: () {
             builder.element('w:pPr', nest: () {
@@ -311,7 +282,6 @@ class HtmlToDocxConverter {
           _processInlineChildren(node, builder, images: images);
           break;
         default:
-          // DEBUG: Log unhandled block-level tags
           for (final child in node.children) {
             _processNode(child, builder, images: images);
           }
@@ -327,7 +297,7 @@ class HtmlToDocxConverter {
     }
   }
 
-  /// Find first <ul> or <ol> direct child of an element.
+  /// Find first ul or ol tags direct child of an element.
   static XmlElement? _findListChild(XmlElement node) {
     for (final child in node.children) {
       if (child is XmlElement) {
@@ -338,9 +308,7 @@ class HtmlToDocxConverter {
     return null;
   }
 
-  /// Recursively find and process <li> content inside nested <ul>/<ol>.
-  /// Handles cases like <h2><ul><ul><li>text</li></ul></ul></h2>
-  /// where _findListChild returns the outer <ul> but <li> is nested deeper.
+  /// Recursively find and process li tags content inside nested ul and ol tags.
   static void _processAllListItems(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     for (final child in node.children) {
@@ -500,7 +468,7 @@ class HtmlToDocxConverter {
     return null;
   }
 
-  /// Parse image dimensions from <img> attributes or CSS style.
+  /// Parse image dimensions from img tag attributes or CSS style.
   /// Returns (widthEMU, heightEMU). EMU = English Metric Units (914400 per inch).
   /// Get image dimensions — prefers actual image data, falls back to HTML/CSS.
   static (int, int) _parseImageDimensions(XmlElement node, String? base64Data) {
@@ -785,7 +753,7 @@ class HtmlToDocxConverter {
         // FIX: Dispatch child by tag to capture its own formatting!
         // Previously called _processInlineChildren(child) which only processes
         // the child's children — losing the child's own tag-based formatting
-        // (e.g. <i>'s italic, <strike>'s strikethrough were lost).
+        // (e.g. i tag's italic, strike's strikethrough were lost).
         _dispatchInlineElement(child, builder,
             images: images,
             inheritBold: mergedBold,
@@ -863,7 +831,7 @@ class HtmlToDocxConverter {
     }
   }
 
-  /// Process <font> tag with color, face, size attributes.
+  /// Process font tag with color, face, size attributes.
   static void _processFont(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images,
       bool inheritBold = false,
@@ -884,7 +852,7 @@ class HtmlToDocxConverter {
     final bgColor =
         bgMatch != null ? _parseColorValue(bgMatch.group(1)!) : null;
 
-    // FIX: HTML <font size="N"> uses 1-7 scale, not points.
+    // FIX: HTML font size="N" uses 1-7 scale, not points.
     // Convert to half-points for OOXML.
     final mergedSize = _htmlFontSizeToHalfPt(fontSizeAttr) ?? inheritFontSize;
     final mergedFamily = (fontFace != null && fontFace.isNotEmpty)
@@ -924,7 +892,7 @@ class HtmlToDocxConverter {
     }
   }
 
-  /// Convert HTML <font size="N"> (1-7 scale) to OOXML half-points.
+  /// Convert HTML font size="N" (1-7 scale) to OOXML half-points.
   /// Returns null if the attribute is missing or invalid, so the caller
   /// can fall back to inherited font size.
   static double? _htmlFontSizeToHalfPt(String? sizeAttr) {
@@ -942,7 +910,7 @@ class HtmlToDocxConverter {
     return (n * 2).toDouble();
   }
 
-  /// Process <a> (anchor/link) tag.
+  /// Process a tag (anchor/link).
   static void _processAnchor(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images,
       bool inheritBold = false,
@@ -995,11 +963,6 @@ class HtmlToDocxConverter {
   /// Previously, _processSpan/_processFont/_processFormattedRun blindly called
   /// _processInlineChildren(child) for element children, which only processed
   /// the child's children — losing the child's own tag-based formatting.
-  /// For example: <span><i><u><strike><font>text</font></strike></u></i></span>
-  ///   - _processSpan saw <i> as child, called _processInlineChildren(<i>)
-  ///   - _processInlineChildren(<i>) processed <i>'s children (<u>), but
-  ///     <i>'s own italic was NEVER captured!
-  ///   - Similarly, <strike>'s strikethrough was lost.
   ///
   /// Now, each element is dispatched by tag, ensuring its own formatting
   /// (bold/italic/underline/strike) is applied and merged with inherited.
@@ -1130,7 +1093,7 @@ class HtmlToDocxConverter {
   }
 
   /// Create a text run with the given formatting properties.
-  /// Only adds <w:rPr> if there's at least one formatting property to apply.
+  /// Only adds w:rPr if there's at least one formatting property to apply.
   /// fontSize is expected in HALF-POINTS (OOXML w:sz unit).
   static void _addTextRun(XmlBuilder builder, String text,
       {bool bold = false,
@@ -1165,7 +1128,8 @@ class HtmlToDocxConverter {
             builder.element('w:rStyle', attributes: {'w:val': 'Hyperlink'});
           }
           if (fontSize != null) {
-            final halfPt = (fontSize is int ? fontSize : (fontSize).round());
+            final halfPt =
+                (fontSize is int ? fontSize : (fontSize).round());
             builder.element('w:sz', attributes: {'w:val': '$halfPt'});
             builder.element('w:szCs', attributes: {'w:val': '$halfPt'});
           }
@@ -1264,36 +1228,8 @@ class HtmlToDocxConverter {
     return 0;
   }
 
-  // static void _processTable(XmlElement node, XmlBuilder builder,
-  //     {List<ExtractedImage>? images}) {
-  //   builder.element('w:tbl', nest: () {
-  //     builder.element('w:tblPr', nest: () {
-  //       builder.element('w:tblStyle', attributes: {'w:val': 'TableGrid'});
-  //       builder.element('w:tblW', attributes: {'w:w': '5000', 'w:type': 'pct'});
-  //       builder.element('w:tblBorders', nest: () {
-  //         for (final border in [
-  //           'top',
-  //           'left',
-  //           'bottom',
-  //           'right',
-  //           'insideH',
-  //           'insideV'
-  //         ]) {
-  //           builder.element('w:$border', attributes: {
-  //             'w:val': 'single',
-  //             'w:sz': '4',
-  //             'w:space': '0',
-  //             'w:color': '999999',
-  //           });
-  //         }
-  //       });
-  //     });
-  //     // Process all children: direct <tr> AND rows inside <thead>/<tbody>/<tfoot>
-  //     _processTableRows(node, builder, images: images);
-  //   });
-  // }
 
-  /// Recursively find and process <tr> elements, handling <thead>/<tbody>/<tfoot>.
+  /// Recursively find and process tr elements, handling thead/tbody/tfoot.
   static void _processTableRows(XmlElement node, XmlBuilder builder,
       {List<ExtractedImage>? images}) {
     for (final child in node.children) {

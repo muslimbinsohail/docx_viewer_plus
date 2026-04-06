@@ -1,8 +1,9 @@
 name: docx_viewer_plus
 
-description: A powerful Flutter package for viewing and editing .docx (Microsoft Word) files natively. Supports rich text editing, customizable toolbar, RTL languages, and cross-platform save/share. Does not support legacy .doc format.
-
-version: 1.1.0
+description: >-
+  A Flutter package for viewing and editing .docx files.
+  Supports rich text editing, customizable toolbar, and cross-platform save.
+version: 1.1.1
 
 homepage: https://github.com/muslimbinsohail/docx_viewer_plus
 repository: https://github.com/muslimbinsohail/docx_viewer_plus
