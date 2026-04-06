@@ -711,7 +711,7 @@ class HtmlToDocxConverter {
     }
   }
 
-  /// Process a formatted run (<b>, <i>, <u>, <s>, <strike>, <del>).
+  /// Process a formatted run (b, i, u, s, strike, del) tags.
   /// Merges own formatting with inherited formatting from parent.
   static void _processFormattedRun(
     XmlElement node,

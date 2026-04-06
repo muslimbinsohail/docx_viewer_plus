@@ -1,4 +1,4 @@
-library docx_viewer_plus;
+library;
 
 export 'src/models/viewer_configs.dart';
 export 'src/services/docx_service.dart';
