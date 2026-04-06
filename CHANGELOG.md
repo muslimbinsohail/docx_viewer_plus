@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.3] - 2026-04-06
+
+### Fixed
+
+- Strike through issue in DOCX files preview.
+
+
 ## [1.1.2] - 2026-04-06
 
 ### Fixed

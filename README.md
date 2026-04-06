@@ -40,7 +40,7 @@ native document libraries.
 ```yaml
 
 dependencies:
-  docx_viewer_plus: ^1.1.2
+  docx_viewer_plus: ^1.1.3
 
 ```
 ## Quick Start

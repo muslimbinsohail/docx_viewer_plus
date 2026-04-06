@@ -501,7 +501,7 @@ class DocxParser {
       final s = _firstDir(rPr, 'strike');
       if (s != null) {
         final v = _attr(s, 'val', '');
-        strike = v.isEmpty || v != 'false';
+        strike = v.isEmpty || (v != '0' && v != 'false');
       }
       final sz = _firstDir(rPr, 'sz');
       if (sz != null) fs = _attr(sz, 'val');
