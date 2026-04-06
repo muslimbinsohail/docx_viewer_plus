@@ -8,13 +8,11 @@ homepage: https://github.com/muslimbinsohail/docx_viewer_plus
 repository: https://github.com/muslimbinsohail/docx_viewer_plus
 issue_tracker: https://github.com/muslimbinsohail/docx_viewer_plus/issues
 
-publish_to: none
 topics:
   - docx
   - viewer
   - editor
   - word
-  - document
   - rich-text
 
 environment:
