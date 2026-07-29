@@ -331,7 +331,7 @@ DocxViewerWidget(
 
 | iOS | Supported | WKWebView |
 
-| macOS | Supported | WKWebView |
+| macOS | Supported | WKWebView with mouse, text selection, and trackpad/mouse wheel scrolling |
 
 | Web | Not supported | Requires native WebView |
 
@@ -356,6 +356,13 @@ fallback to original bytes.
 **Images not appearing**: Embedded images are preserved.
 
 External URLs are not supported.
+
+
+
+**macOS document does not respond to mouse or scrolling**: Update to the
+latest package version. macOS uses eager pointer forwarding for the embedded
+WKWebView so clicks, selection drags, and scrolling are delivered to the
+document.
 
 
 

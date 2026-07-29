@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.4] - 2026-07-29
+
+### Fixed
+
+- Fixed macOS WebView input handling so mouse clicks, text selection, and trackpad or mouse wheel scrolling reach the document.
+
 ## [1.1.3] - 2026-04-06
 
 ### Fixed

@@ -319,15 +319,27 @@ class EditorWebviewState extends State<EditorWebview> {
   Future<void> clearFormatting() =>
       executeJavaScript('document.execCommand("removeFormat", false, null)');
 
+  Set<Factory<OneSequenceGestureRecognizer>> _gestureRecognizers() {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      // AppKitView needs eager forwarding so WKWebView receives mouse clicks,
+      // drag selection, and trackpad/mouse wheel scrolling.
+      return {
+        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+      };
+    }
+
+    return {
+      Factory<VerticalDragGestureRecognizer>(
+          () => VerticalDragGestureRecognizer()),
+      Factory<ScaleGestureRecognizer>(() => ScaleGestureRecognizer()),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return WebViewWidget(
       controller: _controller,
-      gestureRecognizers: {
-        Factory<VerticalDragGestureRecognizer>(
-            () => VerticalDragGestureRecognizer()),
-        Factory<ScaleGestureRecognizer>(() => ScaleGestureRecognizer()),
-      },
+      gestureRecognizers: _gestureRecognizers(),
     );
   }
 }
