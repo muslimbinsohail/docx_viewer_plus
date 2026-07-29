@@ -40,7 +40,7 @@ native document libraries.
 ```yaml
 
 dependencies:
-  docx_viewer_plus: ^1.1.4
+  docx_viewer_plus: ^1.1.5
 
 ```
 ## Quick Start
@@ -331,7 +331,7 @@ DocxViewerWidget(
 
 | iOS | Supported | WKWebView |
 
-| macOS | Supported | WKWebView with mouse, text selection, and trackpad/mouse wheel scrolling |
+| macOS | Supported | WKWebView — mouse clicks, text selection, drag-to-select, and trackpad/mouse-wheel scrolling all work natively via `EagerGestureRecognizer` |
 
 | Web | Not supported | Requires native WebView |
 
@@ -359,10 +359,12 @@ External URLs are not supported.
 
 
 
-**macOS document does not respond to mouse or scrolling**: Update to the
-latest package version. macOS applies read-only HTML before the WebView loads,
-keeps the document container text-selectable, and includes a desktop scroll
-fallback for trackpads and mouse wheels.
+**macOS — no mouse, trackpad, or scroll response**: This was caused by a
+`Listener` widget sitting above the native `AppKitView` in Flutter's hit-test
+tree, consuming all pointer signals before WKWebView could receive them.
+Fixed in **v1.1.5** — update your dependency. The fix removes the `Listener`
+wrapper entirely; `EagerGestureRecognizer` alone is sufficient and correct for
+macOS WKWebView input routing.
 
 
 

@@ -171,7 +171,7 @@ class EditorWebviewState extends State<EditorWebview> {
   /// Set up JavaScript listeners for content changes.
   void _setupEditingListeners() {
     if (widget.isReadOnly) {
-      // READ-ONLY MODE: block all editing but allow selection/copy
+      // READ-ONLY MODE: block all editing but allow selection/copy/scroll.
       _controller.runJavaScript('''
       // Make the full document non-editable while keeping native text selection.
       const _editor = document.querySelector('.doc-editor');
@@ -180,6 +180,12 @@ class EditorWebviewState extends State<EditorWebview> {
         _editor.contentEditable = 'false';
         _editor.tabIndex = 0;
       }
+      // Explicitly keep pointer-events enabled so WKWebView (macOS) continues
+      // to forward mouse clicks, hover, and scroll to the native web content.
+      document.documentElement.style.pointerEvents = 'auto';
+      document.body.style.pointerEvents = 'auto';
+      if (_editor) _editor.style.pointerEvents = 'auto';
+
       document.documentElement.style.userSelect = 'text';
       document.documentElement.style.webkitUserSelect = 'text';
       document.body.style.userSelect = 'text';
@@ -218,8 +224,6 @@ class EditorWebviewState extends State<EditorWebview> {
       document.addEventListener('dragstart', function(e) {
         if (e.target.tagName !== 'IMG') e.preventDefault();
       }, true);
-      
-      // Prevent context menu "Paste" / "Cut" (keep "Copy" and "Select All")
     ''');
     } else {
       // EDIT MODE (existing code)
@@ -333,13 +337,17 @@ class EditorWebviewState extends State<EditorWebview> {
 
   Set<Factory<OneSequenceGestureRecognizer>> _gestureRecognizers() {
     if (defaultTargetPlatform == TargetPlatform.macOS) {
-      // AppKitView needs eager forwarding so WKWebView receives mouse clicks,
-      // drag selection, and trackpad/mouse wheel scrolling.
+      // On macOS, EagerGestureRecognizer tells Flutter's gesture arena to
+      // immediately yield to the AppKitView (WKWebView), so the native view
+      // receives mouse clicks, drag-to-select, and trackpad/mouse-wheel
+      // scrolling without any Flutter widget intercepting them first.
       return {
         Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
       };
     }
 
+    // On Android / iOS the default touch handling needs scroll + scale
+    // forwarded so the WebView can scroll and pinch-zoom.
     return {
       Factory<VerticalDragGestureRecognizer>(
           () => VerticalDragGestureRecognizer()),
@@ -347,35 +355,16 @@ class EditorWebviewState extends State<EditorWebview> {
     };
   }
 
-  void _handleMacOsPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-
-    final dx = event.scrollDelta.dx;
-    final dy = event.scrollDelta.dy;
-    unawaited(executeJavaScript('''
-      window.scrollBy({
-        left: $dx,
-        top: $dy,
-        behavior: 'auto'
-      });
-    '''));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final webView = WebViewWidget(
+    // On macOS the EagerGestureRecognizer (above) is all that is needed.
+    // Do NOT wrap the WebViewWidget in a Listener on macOS — a Listener sits
+    // above AppKitView in the Flutter hit-test tree and consumes pointer
+    // signals before they reach the native WKWebView, which breaks mouse
+    // clicks, text selection, and trackpad/mouse-wheel scrolling.
+    return WebViewWidget(
       controller: _controller,
       gestureRecognizers: _gestureRecognizers(),
-    );
-
-    if (defaultTargetPlatform != TargetPlatform.macOS) {
-      return webView;
-    }
-
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerSignal: _handleMacOsPointerSignal,
-      child: webView,
     );
   }
 }

@@ -3,7 +3,7 @@ name: docx_viewer_plus
 description: >-
   A Flutter package for viewing and editing .docx files.
   Supports rich text editing, customizable toolbar, and cross-platform save.
-version: 1.1.4
+version: 1.1.5
 
 homepage: https://github.com/muslimbinsohail/docx_viewer_plus
 repository: https://github.com/muslimbinsohail/docx_viewer_plus

@@ -7,13 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.5] - 2026-07-29
+
+### Fixed
+
+- **macOS — mouse, trackpad, and text selection completely non-functional**:
+  Root cause was a `Listener` widget wrapping the `WebViewWidget` on macOS.
+  Flutter's hit-test tree placed the `Listener` above the native `AppKitView`
+  (WKWebView), causing it to consume all `PointerSignalEvent`s before they
+  could reach the native view. This broke mouse clicks, drag-to-select, and
+  trackpad/mouse-wheel scrolling entirely.
+  - **Fix**: Removed the `Listener` wrapper and the manual `window.scrollBy`
+    JS injection. `EagerGestureRecognizer` alone is sufficient — it tells
+    Flutter's gesture arena to yield immediately to the `AppKitView`, which
+    then handles all pointer routing natively.
+- **macOS — pointer events silently suppressed by viewport `user-scalable=no`**:
+  The `<meta name="viewport" … user-scalable=no>` tag can suppress WKWebView
+  pointer-event forwarding on macOS desktop. Removed `user-scalable=no` and
+  `maximum-scale=1.0` from the viewport meta.
+- **macOS — WKWebView stops forwarding events after `contenteditable="false"`**:
+  In read-only mode the JS setup did not explicitly restore `pointer-events`.
+  Added `pointer-events: auto` to `html`, `body`, and `.doc-editor` via both
+  CSS (in the generated HTML) and the post-load JS for read-only mode.
+- Removed deprecated `-webkit-overflow-scrolling: touch` (no-op on modern
+  WebKit and conflicts with native macOS scroll momentum).
+
 ## [1.1.4] - 2026-07-29
 
 ### Fixed
 
-- Fixed macOS WebView input handling so mouse clicks, text selection, and trackpad or mouse wheel scrolling reach the document.
-- Fixed read-only documents being generated as editable HTML before read-only mode was applied, which could interfere with text selection on macOS.
-- Added a macOS desktop scroll fallback for trackpad and mouse wheel events in the embedded WebView.
+- Prior attempt at macOS WebView input handling (superseded by 1.1.5).
 
 ## [1.1.3] - 2026-04-06
 

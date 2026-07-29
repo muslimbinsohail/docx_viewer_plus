@@ -10,7 +10,7 @@ class DocxToHtmlConverter {
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -18,8 +18,8 @@ class DocxToHtmlConverter {
     padding: 0;
     height: 100%;
     overflow: auto;
-    -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    pointer-events: auto;
   }
   body {
     font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans', 'Noto Sans Arabic', 'Noto Sans CJK SC', 'Noto Sans Devanagari', 'Noto Sans Thai', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans', 'Calibri', Arial, sans-serif;
@@ -38,6 +38,8 @@ class DocxToHtmlConverter {
     outline: none;
     user-select: text;
     -webkit-user-select: text;
+    pointer-events: auto;
+    cursor: auto;
   }
   h1 { font-size: 28pt; font-weight: bold; color: #1a1a1a; margin: 16pt 0 8pt 0; }
   h2 { font-size: 22pt; font-weight: bold; color: #1a1a1a; margin: 14pt 0 8pt 0; }
