@@ -45,15 +45,22 @@ class DocxViewerWidgetState extends State<DocxViewerWidget> {
     super.initState();
     _service = DocxService();
     _service.addListener(_onServiceChange);
-    _service.loadFromPath(widget.filePath);
+    _service.loadFromPath(
+      widget.filePath,
+      editable: !widget.config.isReadOnly,
+    );
   }
 
   @override
   void didUpdateWidget(DocxViewerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filePath != widget.filePath) {
+    if (oldWidget.filePath != widget.filePath ||
+        oldWidget.config.isReadOnly != widget.config.isReadOnly) {
       _initialHtml = ''; // Reset for new file
-      _service.loadFromPath(widget.filePath);
+      _service.loadFromPath(
+        widget.filePath,
+        editable: !widget.config.isReadOnly,
+      );
     }
   }
 

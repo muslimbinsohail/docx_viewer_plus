@@ -173,10 +173,22 @@ class EditorWebviewState extends State<EditorWebview> {
     if (widget.isReadOnly) {
       // READ-ONLY MODE: block all editing but allow selection/copy
       _controller.runJavaScript('''
-      // Make body non-editable
+      // Make the full document non-editable while keeping native text selection.
+      const _editor = document.querySelector('.doc-editor');
       document.body.contentEditable = 'false';
+      if (_editor) {
+        _editor.contentEditable = 'false';
+        _editor.tabIndex = 0;
+      }
+      document.documentElement.style.userSelect = 'text';
+      document.documentElement.style.webkitUserSelect = 'text';
       document.body.style.userSelect = 'text';
       document.body.style.webkitUserSelect = 'text';
+      if (_editor) {
+        _editor.style.userSelect = 'text';
+        _editor.style.webkitUserSelect = 'text';
+        _editor.style.cursor = 'text';
+      }
       
       // Block all input events that could modify content
       document.addEventListener('keydown', function(e) {
@@ -335,11 +347,35 @@ class EditorWebviewState extends State<EditorWebview> {
     };
   }
 
+  void _handleMacOsPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+
+    final dx = event.scrollDelta.dx;
+    final dy = event.scrollDelta.dy;
+    unawaited(executeJavaScript('''
+      window.scrollBy({
+        left: $dx,
+        top: $dy,
+        behavior: 'auto'
+      });
+    '''));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WebViewWidget(
+    final webView = WebViewWidget(
       controller: _controller,
       gestureRecognizers: _gestureRecognizers(),
+    );
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) {
+      return webView;
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: _handleMacOsPointerSignal,
+      child: webView,
     );
   }
 }

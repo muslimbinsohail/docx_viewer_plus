@@ -36,6 +36,8 @@ class DocxToHtmlConverter {
     min-height: 100%;
     unicode-bidi: plaintext;
     outline: none;
+    user-select: text;
+    -webkit-user-select: text;
   }
   h1 { font-size: 28pt; font-weight: bold; color: #1a1a1a; margin: 16pt 0 8pt 0; }
   h2 { font-size: 22pt; font-weight: bold; color: #1a1a1a; margin: 14pt 0 8pt 0; }

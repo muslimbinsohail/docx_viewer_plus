@@ -40,7 +40,7 @@ native document libraries.
 ```yaml
 
 dependencies:
-  docx_viewer_plus: ^1.1.3
+  docx_viewer_plus: ^1.1.4
 
 ```
 ## Quick Start
@@ -360,9 +360,9 @@ External URLs are not supported.
 
 
 **macOS document does not respond to mouse or scrolling**: Update to the
-latest package version. macOS uses eager pointer forwarding for the embedded
-WKWebView so clicks, selection drags, and scrolling are delivered to the
-document.
+latest package version. macOS applies read-only HTML before the WebView loads,
+keeps the document container text-selectable, and includes a desktop scroll
+fallback for trackpads and mouse wheels.
 
 
 

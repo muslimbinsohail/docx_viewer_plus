@@ -27,7 +27,7 @@ class DocxService extends ChangeNotifier {
   String get loadingMessage => _loadingMessage;
 
   /// Load a .docx file from a file path.
-  Future<bool> loadFromPath(String filePath) async {
+  Future<bool> loadFromPath(String filePath, {bool editable = true}) async {
     _setLoading(true, 'Reading file...');
     _errorMessage = '';
     try {
@@ -41,7 +41,7 @@ class DocxService extends ChangeNotifier {
       final bytes = await file.readAsBytes();
       _fileName = filePath.split('/').last;
       _originalFileBytes = bytes;
-      await _parseAndConvert(bytes);
+      await _parseAndConvert(bytes, editable: editable);
       return true;
     } catch (e) {
       _errorMessage = 'Failed to load file: $e';
@@ -53,13 +53,13 @@ class DocxService extends ChangeNotifier {
 
   /// Load a .docx from raw bytes.
   Future<bool> loadFromBytes(Uint8List bytes,
-      {String fileName = 'document.docx'}) async {
+      {String fileName = 'document.docx', bool editable = true}) async {
     _setLoading(true, 'Reading data...');
     _errorMessage = '';
     try {
       _fileName = fileName;
       _originalFileBytes = bytes;
-      await _parseAndConvert(bytes);
+      await _parseAndConvert(bytes, editable: editable);
       return true;
     } catch (e) {
       _errorMessage = 'Failed to load file: $e';
@@ -69,7 +69,8 @@ class DocxService extends ChangeNotifier {
     }
   }
 
-  Future<void> _parseAndConvert(Uint8List bytes) async {
+  Future<void> _parseAndConvert(Uint8List bytes,
+      {required bool editable}) async {
     try {
       _loadingMessage = 'Parsing document...';
       notifyListeners();
@@ -77,7 +78,7 @@ class DocxService extends ChangeNotifier {
 
       _loadingMessage = 'Rendering...';
       notifyListeners();
-      _html = await convertToHtmlInIsolate(_document!, editable: true);
+      _html = await convertToHtmlInIsolate(_document!, editable: editable);
 
       _loadingMessage = '';
       _isModified = false;
